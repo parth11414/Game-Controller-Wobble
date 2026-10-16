@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tilt Ball - phone controlled</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b1220; --panel:#111a2e; --text:#f8fafc; --muted:#94a3b8; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#3b82f6; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:system-ui,"Segoe UI",Roboto,sans-serif; display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
+  header { width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  h1 { margin:0; font-size:20px; }
+  .pills { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .pill { background:var(--panel); border-radius:999px; padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:6px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); flex:none; }
+  .dot.ok { background:var(--ok); }
+  .dot.warn { background:var(--warn); }
+  .scoreboard { width:100%; max-width:900px; display:flex; gap:8px; flex-wrap:wrap; min-height:34px; }
+  .chip { background:var(--panel); border-radius:10px; padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:8px; }
+  .chip.off { opacity:.45; }
+  .chip b { font-weight:700; }
+  .chip .stat { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .stage { position:relative; width:100%; max-width:900px; }
+  canvas { width:100%; height:auto; display:block; background:#0f172a; border:2px solid #1e293b; border-radius:16px; }
+  .overlay { position:absolute; inset:0; background:rgba(11,18,32,.93); border-radius:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:20px; }
+  .hidden { display:none !important; }
+  .overlay img { width:220px; height:220px; background:#fff; border-radius:12px; padding:6px; }
+  .title { font-size:24px; font-weight:700; }
+  .code { font-size:40px; font-weight:800; letter-spacing:10px; padding-left:10px; }
+  .muted { color:var(--muted); font-size:14px; max-width:520px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; }
+  button.small { padding:6px 12px; font-size:13px; }
+  button.ghost { background:transparent; border:1px solid #334155; color:var(--muted); }
+  .help { color:var(--muted); font-size:13px; text-align:center; max-width:900px; }
+  h1 { user-select:none; }
+  .toasts { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; z-index:10; }
+  .toast { background:rgba(17,26,46,.96); border:1px solid #334155; border-radius:12px; padding:10px 16px; font-size:14px; animation:toastIn .25s ease-out; }
+  .toast.big { font-size:22px; font-weight:800; border-color:#fbbf24; color:#fbbf24; }
+  @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  canvas.party { animation:hue 6s linear infinite; }
+  @keyframes hue { to { filter:hue-rotate(360deg); } }
+</style>
+</head>
+<body>
+  <!-- Psst. You read page source for fun? Good. Open the browser console. -->
+  <header>
+    <h1 id="title">Tilt Ball</h1>
+    <div class="pills">
+      <div class="pill"><span class="dot" id="dotServer"></span><span id="txtServer">Server: connecting</span></div>
+      <div class="pill" id="pillPlayers">Players: 0/4</div>
+      <div class="pill" id="pillRoom">Room: -</div>
+      <button class="small" id="joinBtn">+ Add player (QR)</button>
+    </div>
+  </header>
+
+  <div class="scoreboard" id="scoreboard"></div>
+
+  <div class="stage">
+    <canvas id="game" width="900" height="560"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="title" id="ovTitle">Connecting to server…</div>
+      <img id="qr" class="hidden" alt="Pairing QR code">
+      <div class="code" id="roomCode"></div>
+      <div class="muted" id="ovMsg"></div>
+      <button id="resumeBtn" class="hidden">Back to game</button>
+      <button class="ghost" id="kbBtn">Play with keyboard instead (testing)</button>
+    </div>
+  </div>
+
+  <div class="help">Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+(() => {
+  const W = 900, H = 560;
+  const canvas = document.getElementById('game');
+  const g = canvas.getContext('2d');
+  const el = (id) => document.getElementById(id);
+
+  // ---------- state ----------
+  const MAX_PLAYERS = 4;
+  const net = { ws: false, rtt: null, kbMode: false, showJoin: false, everPaired: false };
+  const keys = new Set();
+  const players = new Map(); // slot (0-3) or 'kb' -> player
+
+  const BALL_R = 14, STAR_R = 11;
+  const ACCEL = 1500, DRAG = 1.8, MAX_SPEED = 560, BOUNCE = 0.45;
+  const JUMP_TIME = 0.7, JUMP_COOLDOWN = 0.9;
+  const DASH_COOLDOWN = 1.5, DASH_IMPULSE = 520, BOOST_TIME = 0.35;
+  let level = 1, holes = [], stars = [];
+  let moon = false, party = false;
+  const confetti = [];
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const spawnOf = (p) => ({ x: 60, y: 70 + (p.key === 'kb' ? 4 : p.key) * ((H - 140) / 4) });
+  const connectedPlayers = () => [...players.values()].filter((p) => p.connected);
+  const phonePlayers = () => [...players.values()].filter((p) => p.key !== 'kb' && p.connected);
+
+  function resetBall(p) {
+    const s = spawnOf(p);
+    p.ball = { x: s.x, y: s.y, vx: 0, vy: 0 };
+    p.airborne = 0; p.jumpCd = 0; p.dashCd = 0; p.boost = 0;
+  }
+
+  function makePlayer(key, color) {
+    const p = {
+      key, color, connected: true, ball: null,
+      name: key === 'kb' ? 'Keyboard' : `Player ${key + 1}`,
+      stars: 0, falls: 0, flash: 0, input: { x: 0, y: 0 }, lastFrame: 0,
+      frames: 0, rate: 0, rtt: null,
+      airborne: 0, jumpCd: 0, dashCd: 0, boost: 0,
+      mash: [], dizzy: 0, ach: new Set(), trail: [], jumpLen: JUMP_TIME,
+    };
+    resetBall(p);
+    return p;
+  }
+
+  function ensurePlayer(slot, color) {
+    if (!players.has(slot)) players.set(slot, makePlayer(slot, color));
+    return players.get(slot);
+  }
+
+  // ---------- level ----------
+  function placeItems(count, radius, avoid) {
+    const items = [];
+    let guard = 0;
+    while (items.length < count && guard++ < 3000) {
+      const p = { x: rand(170, W - 50), y: rand(50, H - 50), r: radius };
+      if ([...avoid, ...items].every((o) => Math.hypot(o.x - p.x, o.y - p.y) > (o.r || 0) + radius + 40)) items.push(p);
+    }
+    return items;
+  }
+
+  function newLevel() {
+    const n = Math.max(1, connectedPlayers().length);
+    holes = placeItems(2 + level * 2, 0, []).map((h) => ({ ...h, r: rand(24, 36) }));
+    stars = placeItems(3 + level + (n - 1) * 2, STAR_R, holes).map((s) => ({ ...s, got: false }));
+    for (const p of players.values()) resetBall(p);
+  }
+
+  // ---------- actions ----------
+  function jump(p) {
+    if (!p) return;
+    mash(p);
+    if (p.airborne <= 0 && p.jumpCd <= 0) {
+      p.jumpLen = moon ? JUMP_TIME * 2 : JUMP_TIME;
+      p.airborne = p.jumpLen; p.jumpCd = JUMP_COOLDOWN;
+    }
+  }
+
+  function dash(p) {
+    if (!p || p.dashCd > 0) return;
+    let dx = p.ball.vx, dy = p.ball.vy, m = Math.hypot(dx, dy);
+    if (m < 30) { dx = p.input.x; dy = p.input.y; m = Math.hypot(dx, dy); }
+    if (m < 0.05) return;
+    p.ball.vx += (dx / m) * DASH_IMPULSE;
+    p.ball.vy += (dy / m) * DASH_IMPULSE;
+    p.boost = BOOST_TIME; p.dashCd = DASH_COOLDOWN;
+  }
+
+  let ws = null;
+  function haptic(p, kind) { // ask the phone to vibrate
+    if (p.key !== 'kb' && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'haptic', p: p.key, kind }));
+  }
+
+  // ---------- simulation ----------
+  function updatePlayer(p, dt, now) {
+    const b = p.ball;
+    let ax = 0, ay = 0;
+    if (p.key === 'kb') {
+      if (keys.has('arrowleft') || keys.has('a')) ax -= 1;
+      if (keys.has('arrowright') || keys.has('d')) ax += 1;
+      if (keys.has('arrowup') || keys.has('w')) ay -= 1;
+      if (keys.has('arrowdown') || keys.has('s')) ay += 1;
+      p.input.x = ax; p.input.y = ay;
+    } else if (now - p.lastFrame <= 1000) { // stale phone data is ignored
+      ax = p.input.x; ay = p.input.y;
+    }
+
+    if (p.dizzy > 0) { ax = -ax; ay = -ay; p.dizzy = Math.max(0, p.dizzy - dt); }
+    b.vx += ax * ACCEL * dt;
+    b.vy += ay * ACCEL * dt;
+    const drag = Math.exp(-(moon ? 0.6 : DRAG) * dt);
+    b.vx *= drag; b.vy *= drag;
+    const cap = p.boost > 0 ? MAX_SPEED * 1.7 : MAX_SPEED;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > cap) { b.vx *= cap / sp; b.vy *= cap / sp; }
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    if (party) { p.trail.push({ x: b.x, y: b.y }); if (p.trail.length > 36) p.trail.shift(); } else if (p.trail.length) p.trail.length = 0;
+
+    const bounce = moon ? 0.85 : BOUNCE;
+    if (b.x < BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx) * bounce; }
+    if (b.x > W - BALL_R) { b.x = W - BALL_R; b.vx = -Math.abs(b.vx) * bounce; }
+    if (b.y < BALL_R) { b.y = BALL_R; b.vy = Math.abs(b.vy) * bounce; }
+    if (b.y > H - BALL_R) { b.y = H - BALL_R; b.vy = -Math.abs(b.vy) * bounce; }
+
+    p.airborne = Math.max(0, p.airborne - dt);
+    p.jumpCd = Math.max(0, p.jumpCd - dt);
+    p.dashCd = Math.max(0, p.dashCd - dt);
+    p.boost = Math.max(0, p.boost - dt);
+    p.flash = Math.max(0, p.flash - dt);
+
+    for (const s of stars) {
+      if (!s.got && Math.hypot(s.x - b.x, s.y - b.y) < BALL_R + STAR_R) {
+        s.got = true; p.stars++; haptic(p, 'star');
+        if (p.airborne > 0) achieve(p, 'air', `${p.name}: air-star! Grabbed mid-jump.`);
+      }
+    }
+    if (p.airborne <= 0) {
+      for (const h of holes) {
+        if (Math.hypot(h.x - b.x, h.y - b.y) < h.r - 4) { // fell in
+          p.falls++; p.flash = 0.4; haptic(p, 'fall');
+          if (p.falls >= 10) achieve(p, 'gravity', `${p.name}: 10 falls. Gravity 1, you 0.`);
+          resetBall(p);
+          break;
+        }
+      }
+    }
+  }
+
+  function update(dt) {
+    const now = performance.now();
+    for (const p of players.values()) if (p.connected) updatePlayer(p, dt, now);
+    if (stars.length && stars.every((s) => s.got)) {
+      level++;
+      if (level === 5) toast('Level 5! Okay, you are getting good.');
+      phonePlayers().forEach((p) => haptic(p, 'level'));
+      newLevel();
+    }
+  }
+
+  // ---------- drawing ----------
+  function drawStar(cx, cy, r) {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rad = i % 2 === 0 ? r : r * 0.45;
+      g.lineTo(cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad);
+    }
+    g.closePath();
+    g.fill();
+  }
+
+  function drawBall(p) {
+    const b = p.ball;
+    if (party && p.trail.length) {
+      p.trail.forEach((t, i) => {
+        g.globalAlpha = (i / p.trail.length) * 0.6;
+        g.fillStyle = `hsl(${(i * 12 + performance.now() / 8) % 360},90%,60%)`;
+        g.beginPath(); g.arc(t.x, t.y, BALL_R * (0.3 + (0.6 * i) / p.trail.length), 0, Math.PI * 2); g.fill();
+      });
+      g.globalAlpha = 1;
+    }
+    const prog = p.airborne > 0 ? 1 - p.airborne / p.jumpLen : 0;
+    const lift = p.airborne > 0 ? Math.sin(Math.PI * prog) : 0;
+    g.globalAlpha = p.connected ? 1 : 0.3;
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    g.beginPath();
+    g.ellipse(b.x + lift * 10, b.y + BALL_R * 0.6 + lift * 14, BALL_R * (1 - lift * 0.2), BALL_R * 0.5, 0, 0, Math.PI * 2);
+    g.fill();
+    const r = BALL_R * (1 + lift * 0.5);
+    const by = b.y - lift * 26;
+    g.fillStyle = p.color;
+    g.beginPath(); g.arc(b.x, by, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.35)';
+    g.beginPath(); g.arc(b.x - r / 3, by - r / 3, r / 3, 0, Math.PI * 2); g.fill();
+    if (p.boost > 0) { g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 2; g.beginPath(); g.arc(b.x, by, r + 5, 0, Math.PI * 2); g.stroke(); }
+    if (p.flash > 0) { g.strokeStyle = `rgba(239,68,68,${p.flash * 2})`; g.lineWidth = 4; g.beginPath(); g.arc(b.x, by, 30, 0, Math.PI * 2); g.stroke(); }
+    if (p.dizzy > 0) {
+      for (let i = 0; i < 3; i++) {
+        const a = performance.now() / 150 + (i * 2 * Math.PI) / 3;
+        g.fillStyle = '#fde047'; g.beginPath(); g.arc(b.x + Math.cos(a) * 22, by - r - 6 + Math.sin(a) * 6, 3.5, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.fillStyle = '#fff'; g.font = '700 11px system-ui, sans-serif'; g.textAlign = 'center';
+    g.fillText(p.key === 'kb' ? 'KB' : `P${p.key + 1}`, b.x, by - r - 6);
+    g.textAlign = 'left';
+    g.globalAlpha = 1;
+  }
+
+  function draw() {
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = '#16213a'; g.lineWidth = 1;
+    for (let x = 0; x <= W; x += 50) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    for (let y = 0; y <= H; y += 50) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+
+    for (const h of holes) {
+      const grad = g.createRadialGradient(h.x, h.y, 2, h.x, h.y, h.r);
+      grad.addColorStop(0, '#000'); grad.addColorStop(0.8, '#05080f'); grad.addColorStop(1, '#1e293b');
+      g.fillStyle = grad; g.beginPath(); g.arc(h.x, h.y, h.r, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#fbbf24';
+    for (const s of stars) if (!s.got) drawStar(s.x, s.y, STAR_R + 3);
+    for (const p of players.values()) drawBall(p);
+
+    g.fillStyle = '#e2e8f0'; g.font = '600 18px system-ui, sans-serif';
+    g.fillText(`Level ${level}   Stars left ${stars.filter((s) => !s.got).length}`, 16, 28);
+    drawConfetti();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    stepConfetti(dt);
+    if (!overlayVisible()) update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- UI ----------
+  const overlay = el('overlay');
+  let roomInfo = null;
+
+  const canPlay = () => net.kbMode || (net.ws && phonePlayers().length > 0);
+  function overlayVisible() { return net.showJoin || !canPlay(); }
+
+  function renderScoreboard() {
+    const box = el('scoreboard');
+    box.textContent = '';
+    const list = [...players.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)));
+    for (const p of list) {
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (p.connected ? '' : ' off');
+      const dot = document.createElement('span');
+      dot.className = 'dot'; dot.style.background = p.color;
+      const name = document.createElement('b'); name.textContent = p.name;
+      const stat = document.createElement('span'); stat.className = 'stat';
+      let text = `★ ${p.stars}   ✖ ${p.falls}`;
+      if (p.key !== 'kb') text += p.connected ? `   ping ${p.rtt != null ? p.rtt + ' ms' : '–'} · ${p.rate} Hz` : '   offline';
+      stat.textContent = text;
+      chip.append(dot, name, stat);
+      box.append(chip);
+    }
+  }
+
+  function updateUI() {
+    el('dotServer').className = 'dot' + (net.ws ? ' ok' : ' warn');
+    el('txtServer').textContent = 'Server: ' + (net.ws ? 'connected' + (net.rtt != null ? ` (${net.rtt} ms)` : '') : 'reconnecting…');
+    el('pillPlayers').textContent = `Players: ${phonePlayers().length}/${MAX_PLAYERS}`;
+    el('pillRoom').textContent = 'Room: ' + (roomInfo ? roomInfo.room : '-');
+    el('joinBtn').classList.toggle('hidden', !net.ws);
+
+    overlay.classList.toggle('hidden', !overlayVisible());
+    if (roomInfo) {
+      el('qr').src = roomInfo.qr; el('qr').classList.remove('hidden');
+      el('roomCode').textContent = roomInfo.room;
+    }
+    el('resumeBtn').classList.toggle('hidden', !(net.showJoin && canPlay()));
+    el('kbBtn').classList.toggle('hidden', canPlay());
+
+    if (!net.ws) {
+      el('ovTitle').textContent = 'Connecting to server…';
+      el('ovMsg').textContent = 'Make sure the server is running (npm start). Retrying automatically.';
+    } else if (net.showJoin) {
+      el('ovTitle').textContent = 'Add a player';
+      el('ovMsg').textContent = `Scan with the app on another phone (up to ${MAX_PLAYERS}), or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
+    } else {
+      el('ovTitle').textContent = net.everPaired ? 'All phones disconnected' : 'Pair your phone';
+      el('ovMsg').textContent = net.everPaired
+        ? 'Game paused. The apps reconnect automatically, or scan the QR code again.'
+        : `Open the app and scan this QR code, or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
+    }
+    renderScoreboard();
+  }
+
+  // ---------- networking ----------
+  let retry = 0, pingTimer = null, reconnectTimer = null;
+
+  async function ensureRoom() {
+    const saved = sessionStorage.getItem('room') || '';
+    const res = await fetch('/api/room?code=' + encodeURIComponent(saved), { cache: 'no-store' });
+    roomInfo = await res.json();
+    sessionStorage.setItem('room', roomInfo.room);
+  }
+
+  function scheduleReconnect() {
+    clearTimeout(reconnectTimer);
+    const delay = Math.min(4000, 400 * 2 ** retry++) * (0.8 + Math.random() * 0.4);
+    reconnectTimer = setTimeout(start, delay);
+  }
+
+  function markPhonesOffline() {
+    for (const p of players.values()) if (p.key !== 'kb') { p.connected = false; p.input.x = 0; p.input.y = 0; }
+  }
+
+  async function start() {
+    try { await ensureRoom(); } catch (e) { updateUI(); scheduleReconnect(); return; }
+    updateUI();
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}`);
+    const mine = ws;
+
+    ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: roomInfo.room, role: 'laptop' }));
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      switch (m.type) {
+        case 'joined': {
+          net.ws = true; retry = 0;
+          const listed = new Set();
+          for (const info of m.players || []) {
+            ensurePlayer(info.slot, info.color).connected = true;
+            listed.add(info.slot); net.everPaired = true;
+          }
+          for (const p of players.values()) if (p.key !== 'kb' && !listed.has(p.key)) p.connected = false;
+          clearInterval(pingTimer);
+          pingTimer = setInterval(() => { if (mine.readyState === 1) mine.send(JSON.stringify({ type: 'ping', t: Date.now() })); }, 3000);
+          break;
+        }
+        case 'peer': {
+          if (m.role !== 'phone') break;
+          if (m.connected) {
+            let p = players.get(m.slot);
+            if (!p || m.fresh) { p = makePlayer(m.slot, m.color); players.set(m.slot, p); }
+            p.connected = true; p.lastFrame = performance.now();
+            net.everPaired = true; net.showJoin = false; // a new phone arrived: back to the game
+          } else {
+            const p = players.get(m.slot);
+            if (p) { p.connected = false; p.input.x = 0; p.input.y = 0; }
+          }
+          break;
+        }
+        case 's': {
+          const p = players.get(m.p);
+          if (p) { p.input.x = m.x || 0; p.input.y = m.y || 0; p.lastFrame = performance.now(); p.frames++; }
+          break;
+        }
+        case 'jump': jump(players.get(m.p)); break;
+        case 'btn': {
+          const p = players.get(m.p);
+          if (m.name === 'dash') dash(p); else if (m.name === 'jump') jump(p);
+          break;
+        }
+        case 'lat': {
+          const p = players.get(m.p);
+          if (p) p.rtt = m.ms;
+          break;
+        }
+        case 'pong': net.rtt = Date.now() - m.t; break;
+        case 'error': mine.close(); break;
+      }
+      updateUI();
+    };
+    ws.onclose = () => {
+      if (mine !== ws) return;
+      net.ws = false; net.rtt = null;
+      markPhonesOffline();
+      clearInterval(pingTimer);
+      updateUI();
+      scheduleReconnect();
+    };
+    ws.onerror = () => {};
+  }
+
+  setInterval(() => { for (const p of players.values()) { p.rate = p.frames; p.frames = 0; } }, 1000);
+  setInterval(updateUI, 250);
+
+  // ---------- keyboard (testing without phones) + buttons ----------
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    const kb = players.get('kb');
+    eggKey(k);
+    if (k === ' ') { jump(kb); e.preventDefault(); return; }
+    if (k === 'shift') { dash(kb); return; }
+    if (k.startsWith('arrow')) e.preventDefault();
+    keys.add(k);
+  });
+  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+  el('kbBtn').addEventListener('click', () => {
+    net.kbMode = true;
+    if (!players.has('kb')) players.set('kb', makePlayer('kb', '#e2e8f0'));
+    updateUI();
+  });
+  el('joinBtn').addEventListener('click', () => { net.showJoin = true; updateUI(); });
+  el('resumeBtn').addEventListener('click', () => { net.showJoin = false; updateUI(); });
+
+  // ================= easter eggs =================
+  const CLUB_NAME = 'VinnovateIT';
+  const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+  const SECRET_WORDS = {
+    hello: () => helloBanner(),
+    moon: () => toggleMoon(),
+  };
+  let kIdx = 0, typed = '';
+
+  function toast(text, big = false) {
+    const box = el('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast' + (big ? ' big' : '');
+    t.textContent = text;
+    box.append(t);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => t.remove(), big ? 5000 : 3500);
+  }
+
+  function achieve(p, id, text) {
+    if (p.ach.has(id)) return;
+    p.ach.add(id);
+    toast('🏆 ' + text);
+    burst(40);
+  }
+
+  function mash(p) { // hammering JUMP makes you dizzy
+    const now = performance.now();
+    p.mash = p.mash.filter((t) => now - t < 2500);
+    p.mash.push(now);
+    if (p.mash.length >= 6) {
+      p.mash = []; p.dizzy = 5;
+      toast(`${p.name}: easy on the button! Dizzy for 5 s (controls inverted)`);
+      haptic(p, 'fall');
+    }
+  }
+
+  function burst(n = 120) {
+    for (let i = 0; i < n; i++) {
+      confetti.push({ x: rand(0, W), y: rand(-40, 0), vx: rand(-60, 60), vy: rand(120, 360), rot: rand(0, 6.28), vr: rand(-8, 8), size: rand(5, 10), hue: rand(0, 360), life: 4 });
+    }
+  }
+  function stepConfetti(dt) {
+    for (let i = confetti.length - 1; i >= 0; i--) {
+      const c = confetti[i];
+      c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr * dt; c.life -= dt;
+      if (c.life <= 0 || c.y > H + 20) confetti.splice(i, 1);
+    }
+  }
+  function drawConfetti() {
+    for (const c of confetti) {
+      g.save(); g.translate(c.x, c.y); g.rotate(c.rot);
+      g.fillStyle = `hsl(${c.hue},90%,60%)`; g.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2);
+      g.restore();
+    }
+  }
+
+  function toggleParty() {
+    party = !party;
+    canvas.classList.toggle('party', party);
+    toast(party ? '↑↑↓↓←→←→BA  Party mode ON' : 'Party mode off', true);
+    burst(150);
+    phonePlayers().forEach((p) => haptic(p, 'level'));
+  }
+  function toggleMoon() {
+    moon = !moon;
+    toast(moon ? 'Moon gravity ON: everything is floaty' : 'Moon gravity off', true);
+  }
+  function eggKey(k) {
+    kIdx = k === KONAMI[kIdx] ? kIdx + 1 : (k === KONAMI[0] ? 1 : 0);
+    if (kIdx === KONAMI.length) { kIdx = 0; toggleParty(); }
+    if (k.length === 1 && /[a-z]/.test(k)) {
+      typed = (typed + k).slice(-12);
+      for (const [word, fn] of Object.entries(SECRET_WORDS)) {
+        if (typed.endsWith(word)) { typed = ''; fn(); break; }
+      }
+    }
+  }
+
+  // click the title 7 times
+  let titleClicks = 0, titleTimer = null;
+  el('title').addEventListener('click', () => {
+    titleClicks++;
+    clearTimeout(titleTimer);
+    titleTimer = setTimeout(() => { titleClicks = 0; }, 1500);
+    if (titleClicks >= 7) { titleClicks = 0; toggleMoon(); }
+  });
+
+  // ---- the console conversation: hello() -> reply("name") -> remembered next time ----
+  const NAME_KEY = 'tiltball.name';
+  let visitor = null; // remembered name (kept in this browser's localStorage only)
+  try { visitor = localStorage.getItem(NAME_KEY); } catch (e) {}
+  const cleanName = (v) => String(v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 30);
+  // dynamic text is passed as an argument, never inside the format string, so a name like "50%d" can't mess up the console
+  const say = (text, style = 'color:#e2e8f0') => console.log('%c%s', style, text);
+  const LOUD = 'font-size:14px;font-weight:700;color:#fbbf24';
+  const QUIET = 'color:#94a3b8';
+
+  // ---- optional: pass the name on to the author (leave NAME_ENDPOINT empty to keep everything local) ----
+  const NAME_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxpE8oA96embecT24YPu6S_fhXQkxM5dn48u8v5M7cH1zuyhqet6pqhOqC_VD7ZG-21/exec';           // paste your Google Apps Script web-app URL (ends in /exec) or a Discord webhook URL
+  const NAME_ENDPOINT_TYPE = 'sheet'; // 'sheet' (Google Apps Script) or 'discord'
+  const REPORTED_KEY = 'tiltball.reported'; // so the same name from the same browser is only sent once
+
+  function reportName(name) {
+    if (!NAME_ENDPOINT) return;
+    try { if (localStorage.getItem(REPORTED_KEY) === name) return; } catch (e) {}
+    let req;
+    if (NAME_ENDPOINT_TYPE === 'discord') {
+      const safe = name.replace(/[*_~|>\\`@]/g, '');
+      req = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: `🥚 **${safe}** found the console in Tilt Ball`, allowed_mentions: { parse: [] } }),
+      };
+    } else {
+      req = { // text/plain + no-cors avoids a CORS preflight, which Apps Script cannot answer
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ name, time: new Date().toISOString() }),
+      };
+    }
+    fetch(NAME_ENDPOINT, req)
+      .then(() => { try { localStorage.setItem(REPORTED_KEY, name); } catch (e) {} })
+      .catch(() => {});
+  }
+
+  function helloBanner() {
+    if (visitor) toast(`Hello again, ${visitor}! 👋`, true);
+    else toast('Hello, fellow explorer! 👋 Nice find. (psst: there is more in the console)', true);
+    burst(60);
+  }
+
+  window.hello = (name) => {
+    if (typeof name === 'string' && cleanName(name)) return window.reply(name); // hello("Ada") shortcut
+    if (visitor) {
+      say(`Hello again, ${visitor}! 👋 Told you I would remember.`, LOUD);
+      say('(want me to forget you? run forget())', QUIET);
+      helloBanner();
+      return 'welcome back';
+    }
+    say('Hello, stranger 👋 I do not think we have met.', LOUD);
+    say('What is your name?');
+    say('👉 To answer, run: reply("your name")', QUIET);
+    return 'waiting for your answer…';
+  };
+
+  window.reply = (answer) => {
+    const name = typeof answer === 'string' ? cleanName(answer) : '';
+    if (!name) { say('I need a name in quotes, like: reply("Ada")', 'color:#f87171'); return 'try again'; }
+    visitor = name;
+    let saved = true;
+    try { localStorage.setItem(NAME_KEY, name); } catch (e) { saved = false; }
+    say(`Nice to meet you, ${name}. I will remember you. 🧠`, 'font-size:14px;font-weight:700;color:#22c55e');
+    if (NAME_ENDPOINT) {
+      say(saved
+        ? '(I keep it in this browser, and I also pass it on to the author so they can see who found this. Changed your mind? run forget())'
+        : '(this browser will not let me save it, but I do pass it on to the author so they can see who found this)', QUIET);
+      reportName(name);
+    } else {
+      say(saved
+        ? '(it stays in this browser only, nothing is sent anywhere. Changed your mind? run forget())'
+        : '(this browser will not let me save it, so I will only remember you until this tab closes)', QUIET);
+    }
+    toast(`👋 Hello, ${name}! I will remember you.`, true);
+    burst(80);
+    return `nice to meet you, ${name}`;
+  };
+
+  window.forget = () => {
+    visitor = null;
+    try { localStorage.removeItem(NAME_KEY); localStorage.removeItem(REPORTED_KEY); } catch (e) {}
+    say('Poof. Who are you again? 😶');
+    if (NAME_ENDPOINT) say('(a copy of your name already reached the author, and that part I cannot take back)', QUIET);
+    return 'forgotten';
+  };
+
+  say('╔══════════════════════════╗\n║   T I L T   B A L L      ║\n╚══════════════════════════╝', 'color:#3b82f6;font-family:monospace;font-weight:bold;font-size:14px');
+  say(`Built for the ${CLUB_NAME} recruitment project.`, QUIET);
+  if (visitor) {
+    say(`Welcome back, ${visitor}. Told you I would remember. 👋`, LOUD);
+    setTimeout(() => toast(`👋 Welcome back, ${visitor}!`), 1500);
+  } else {
+    say('Psst… you found the console. Say hello:  hello()', LOUD);
+  }
+  say('Hint: you might know this:  ↑ ↑ ↓ ↓ ← → ← → B A', QUIET);
+
+  newLevel();
+  requestAnimationFrame(frame);
+  start();
+})();
+</script>
+</body>
+</html>
