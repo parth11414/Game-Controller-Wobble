@@ -13,7 +13,7 @@ const normalizeServer = (s) => {
 export default function PairingScreen({ onPair, error }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [mode, setMode] = useState('scan'); // 'scan' | 'manual'
-  const [server, setServer] = useState('192.168.1.10:8080');
+  const [server, setServer] = useState('wss://game-controller-wobble.onrender.com');
   const [room, setRoom] = useState('');
   const [scanError, setScanError] = useState(null);
   const handled = useRef(false);
@@ -86,7 +86,7 @@ export default function PairingScreen({ onPair, error }) {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
-            placeholder="192.168.1.10:8080"
+            placeholder="wss://game-controller-wobble.onrender.com"
             placeholderTextColor="#64748b"
           />
           <Text style={styles.label}>Room code</Text>

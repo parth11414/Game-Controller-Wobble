@@ -369,10 +369,19 @@
   // ---------- networking ----------
   let retry = 0, pingTimer = null, reconnectTimer = null;
 
+  const API_BASE = 'https://game-controller-wobble.onrender.com';
+
   async function ensureRoom() {
     const saved = sessionStorage.getItem('room') || '';
-    const res = await fetch('/api/room?code=' + encodeURIComponent(saved), { cache: 'no-store' });
+    const res = await fetch(
+      `${API_BASE}/api/room?code=${encodeURIComponent(saved)}`,
+      { cache: 'no-store' }
+    );
+    if (!res.ok) throw new Error(`Room API failed (${res.status})`);
     roomInfo = await res.json();
+    if (!roomInfo || !roomInfo.room || !roomInfo.server || !roomInfo.qr) {
+      throw new Error('Invalid response from room API');
+    }
     sessionStorage.setItem('room', roomInfo.room);
   }
 
@@ -389,8 +398,8 @@
   async function start() {
     try { await ensureRoom(); } catch (e) { updateUI(); scheduleReconnect(); return; }
     updateUI();
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    ws = new WebSocket(`${proto}://${location.host}`);
+    // The API returns the canonical public WebSocket URL.
+    ws = new WebSocket(roomInfo.server);
     const mine = ws;
 
     ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room: roomInfo.room, role: 'laptop' }));
