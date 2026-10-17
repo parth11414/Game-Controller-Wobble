@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tilt Ball - phone controlled</title>
+<title>WOBBLE — Phone-Controlled Game</title>
 <style>
   :root { color-scheme: dark; --bg:#0b1220; --panel:#111a2e; --text:#f8fafc; --muted:#94a3b8; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#3b82f6; }
   * { box-sizing: border-box; }
@@ -44,7 +44,7 @@
 <body>
   <!-- Psst. You read page source for fun? Good. Open the browser console. -->
   <header>
-    <h1 id="title">Tilt Ball</h1>
+    <h1 id="title">WOBBLE</h1>
     <div class="pills">
       <div class="pill"><span class="dot" id="dotServer"></span><span id="txtServer">Server: connecting</span></div>
       <div class="pill" id="pillPlayers">Players: 0/4</div>
@@ -597,7 +597,7 @@
       req = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: `🥚 **${safe}** found the console in Tilt Ball`, allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({ content: `🥚 **${safe}** found the console in WOBBLE`, allowed_mentions: { parse: [] } }),
       };
     } else {
       req = { // text/plain + no-cors avoids a CORS preflight, which Apps Script cannot answer
