@@ -1,10 +1,10 @@
-# Wobble & Game Controller
+# WOBBLE — Phone-as-Game-Controller
 
-A real-time multiplayer browser game controlled by the motion sensors of a mobile phone. The project connects a mobile controller application to a browser-based game using WebSockets, allowing players to control their characters by physically tilting their phones.
+WOBBLE is a real-time multiplayer browser game controlled by the motion sensors of a mobile phone. The project connects a mobile controller application to a browser-based game using WebSockets, allowing players to control their characters by physically tilting their phones.
 
 ## Project Overview
 
-Wobble & Game Controller explores the use of mobile motion sensors and real-time network communication to create an interactive gaming experience. Instead of using a traditional keyboard or gamepad, players use their smartphones as wireless controllers.
+WOBBLE explores the use of mobile motion sensors and real-time network communication to create an interactive gaming experience. Instead of using a traditional keyboard or gamepad, players use their smartphones as wireless controllers.
 
 The browser displays a game that players can control by tilting their phones. Players connect to a game session by scanning a QR code or entering a room code. The mobile application reads motion data, processes the input relative to a calibrated neutral position, and transmits controller updates to the backend. The backend routes these updates to the appropriate browser game.
 
@@ -83,7 +83,7 @@ This separation allows the mobile controller, backend, and browser game to opera
 ## Repository Structure
 
 ```text
-Game-Controller-Wobble/
+WOBBLE/
 |
 |-- tilt-project/
 |   |-- game/
