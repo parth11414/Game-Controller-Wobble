@@ -82,7 +82,7 @@ export function useGameSocket() {
     setLatency(null);
     setLaptopOnline(false);
     if (!everJoinedRef.current && attemptRef.current >= MAX_FIRST_ATTEMPTS) {
-      giveUp("Couldn't reach the server. Check the address and make sure both devices are on the same Wi-Fi.");
+      giveUp("Couldn't reach the server. Check the room code and your network connection.");
       return;
     }
     scheduleReconnect();
