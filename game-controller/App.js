@@ -7,7 +7,7 @@ import PairingScreen from './src/PairingScreen';
 import ControllerScreen from './src/ControllerScreen';
 
 export default function App() {
-  const { status, latency, laptopOnline, error, player, connect, disconnect, send } = useGameSocket();
+  const { status, latency, laptopOnline, error, player, game, connect, disconnect, send } = useGameSocket();
   const [room, setRoom] = useState('');
 
   const handlePair = (server, roomCode) => {
@@ -28,6 +28,7 @@ export default function App() {
           latency={latency}
           laptopOnline={laptopOnline}
           player={player}
+          game={game}
           send={send}
           onLeave={disconnect}
         />

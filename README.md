@@ -1,10 +1,10 @@
-# WOBBLE — Phone-as-Game-Controller
+# WOBBLE — Phone-Controlled Games
 
-WOBBLE is a real-time multiplayer browser game controlled by the motion sensors of a mobile phone. The project connects a mobile controller application to a browser-based game using WebSockets, allowing players to control their characters by physically tilting their phones.
+WOBBLE is a collection of browser games controlled by the motion sensors of a mobile phone. The browser currently offers WOBBLE and Ping Pong, while a React Native controller app pairs over WebSockets and sends tilt and button input.
 
 ## Project Overview
 
-WOBBLE explores the use of mobile motion sensors and real-time network communication to create an interactive gaming experience. Instead of using a traditional keyboard or gamepad, players use their smartphones as wireless controllers.
+Players choose a game in the browser, then use their smartphones as wireless controllers instead of a traditional gamepad.
 
 The browser displays a game that players can control by tilting their phones. Players connect to a game session by scanning a QR code or entering a room code. The mobile application reads motion data, processes the input relative to a calibrated neutral position, and transmits controller updates to the backend. The backend routes these updates to the appropriate browser game.
 
@@ -15,6 +15,8 @@ The system is designed to support multiple players, connection-status monitoring
 ### Core Features
 
 - **Motion-based controls:** Control the game by tilting a smartphone.
+- **Game selection:** Choose between WOBBLE and Ping Pong from the browser.
+- **Ping Pong:** Play to five points with two phones, or use one phone against the computer. Tilt to move the paddle, use JUMP to serve, and use DASH to charge the next hit.
 - **QR code and room-code pairing:** Connect a mobile controller to the correct game session.
 - **Real-time communication:** Exchange controller inputs and game-session messages using WebSockets.
 - **Motion calibration:** Establish a neutral reference position to make controls more consistent.
@@ -64,7 +66,7 @@ The backend acts as the communication layer rather than rendering the game itsel
 
 ### 3. Browser Game
 
-The browser game contains the user interface, player state, game physics, collision handling, scoring, and rendering logic.
+The browser games contain the user interface, player state, game physics, collision handling, scoring, and rendering logic. The selected game mode is shared with paired phones so the controller screen can show the right controls.
 
 It obtains room information from the backend, establishes a WebSocket connection, receives controller updates, and uses those inputs to update the game.
 
@@ -149,7 +151,9 @@ Ensure that the server starts successfully and that the required port is availab
 
 ### 3. Run the Browser Game
 
-Open `tilt-project/game/index.html` in a browser or serve the game directory using a local static web server.
+Start the backend with `npm start` from `tilt-project/server`, then open `http://localhost:8080` to use the local game and server together. The browser switches to the local room API automatically on localhost.
+
+You can also open `tilt-project/game/index.html` in a browser or serve the game directory using a local static web server.
 
 For local development, verify that the browser's configured backend URL points to the backend you are running.
 
@@ -230,6 +234,8 @@ The following checks are important when validating the application:
 | Reconnection | Communication can recover after a temporary interruption. |
 | Latency display | Ping information is displayed when available. |
 | Multiple players | Different phones control their respective players. |
+| Game selection | Switching between WOBBLE and Ping Pong updates the paired controller instructions. |
+| Ping Pong | One phone plays against the computer, or two phones play head to head; serves, paddle movement, scoring, and power shots respond. |
 | Game actions | Supported actions such as jumping and dashing respond correctly. |
 
 Core pairing, motion-control, calibration, cross-network, and reconnection checks have been tested during development. The remaining checks should be verified against the final submission build.
@@ -247,6 +253,6 @@ Core pairing, motion-control, calibration, cross-network, and reconnection check
 - **Source code:** Available in this repository.
 - **Browser game:** https://game-controller-wobble-game.vercel.app/
 - **Backend:** https://game-controller-wobble.onrender.com/
-- **Android APK:** https://expo.dev/accounts/parthhh_987/projects/game-controller/builds/84713d41-61de-463d-b944-e439a0975a6e
+- **Android APK:** (-)
 - **Demonstration video:** https://drive.google.com/file/d/13JTG351-xbN2V65gT1RyRGuk-DWXmOXA/view?usp=sharing
 

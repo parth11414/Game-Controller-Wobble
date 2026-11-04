@@ -129,6 +129,7 @@ function createRoom(wantedCode) {
     code,
     laptop: null,
     players: new Map(),
+    gameMode: 'wobble',
     lastActive: Date.now(),
   };
 
@@ -383,6 +384,7 @@ function joinLaptop(ws, room) {
     role: 'laptop',
     room: room.code,
     laptop: true,
+    game: room.gameMode,
     players,
   });
 
@@ -452,6 +454,7 @@ function joinPhone(ws, room, msg) {
     laptop: !!room.laptop,
     slot: player.slot,
     color: COLORS[player.slot],
+    game: room.gameMode,
   });
 
   send(room.laptop, {
@@ -529,6 +532,14 @@ wss.on('connection', (ws, req) => {
       case 'join':
         join(ws, msg);
         break;
+
+      case 'mode': {
+        const { room, role } = ws.ctx;
+        if (!room || role !== 'laptop' || (msg.game !== 'wobble' && msg.game !== 'pong')) return;
+        room.gameMode = msg.game;
+        connectedPhones(room).forEach((player) => send(player.ws, { type: 'mode', game: room.gameMode }));
+        break;
+      }
 
       case 's':
       case 'jump':

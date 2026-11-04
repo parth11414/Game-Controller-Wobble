@@ -10,6 +10,10 @@
   body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:system-ui,"Segoe UI",Roboto,sans-serif; display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
   header { width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
   h1 { margin:0; font-size:20px; }
+  .game-switch { display:flex; gap:4px; padding:4px; border:1px solid #263550; border-radius:12px; background:#111a2e; }
+  .game-tab { padding:8px 12px; border-radius:8px; background:transparent; color:#94a3b8; }
+  .game-tab[aria-pressed="true"] { background:#243451; color:#f8fafc; }
+  .game-tab:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
   .pills { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .pill { background:var(--panel); border-radius:999px; padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:6px; }
   .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); flex:none; }
@@ -45,6 +49,10 @@
   <!-- Psst. You read page source for fun? Good. Open the browser console. -->
   <header>
     <h1 id="title">WOBBLE</h1>
+    <nav class="game-switch" aria-label="Choose a game">
+      <button class="game-tab" id="wobbleTab" aria-pressed="true">WOBBLE</button>
+      <button class="game-tab" id="pongTab" aria-pressed="false">PING PONG</button>
+    </nav>
     <div class="pills">
       <div class="pill"><span class="dot" id="dotServer"></span><span id="txtServer">Server: connecting</span></div>
       <div class="pill" id="pillPlayers">Players: 0/4</div>
@@ -67,7 +75,7 @@
     </div>
   </div>
 
-  <div class="help">Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash</div>
+  <div class="help" id="help">Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash</div>
 
 <div class="toasts" id="toasts"></div>
 
@@ -84,13 +92,28 @@
   const keys = new Set();
   const players = new Map(); // slot (0-3) or 'kb' -> player
 
+  let gameMode = 'wobble';
+  try { if (sessionStorage.getItem('wobble.game') === 'pong') gameMode = 'pong'; } catch (e) {}
+  const PADDLE_W = 14, PADDLE_H = 112, PADDLE_INSET = 48, PONG_BALL_R = 11;
+  let pong = createPong();
+
   const BALL_R = 14, STAR_R = 11;
   const ACCEL = 1500, DRAG = 1.8, MAX_SPEED = 560, BOUNCE = 0.45;
   const JUMP_TIME = 0.7, JUMP_COOLDOWN = 0.9;
   const DASH_COOLDOWN = 1.5, DASH_IMPULSE = 520, BOOST_TIME = 0.35;
+  const PONG_POWER_COOLDOWN = 4, PONG_POWER_TRAIL_TIME = 0.75;
   let level = 1, holes = [], stars = [];
   let moon = false, party = false;
   const confetti = [];
+
+  function createPong() {
+    return {
+      ball: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
+      paddles: [H / 2, H / 2], scores: [0, 0],
+      waitingForServe: true, servingSide: 0, winner: null,
+      charged: [false, false], powerCooldowns: [0, 0], trail: [], powerTrail: [], powerTrailTime: 0, powerTrailColor: '#fde047',
+    };
+  }
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const spawnOf = (p) => ({ x: 60, y: 70 + (p.key === 'kb' ? 4 : p.key) * ((H - 140) / 4) });
@@ -159,6 +182,136 @@
     p.boost = BOOST_TIME; p.dashCd = DASH_COOLDOWN;
   }
 
+  function setGameMode(mode) {
+    if (mode !== 'wobble' && mode !== 'pong') return;
+    if (gameMode === mode) {
+      if (mode === 'pong' && pong.winner != null) { pong = createPong(); updateUI(); }
+      return;
+    }
+    gameMode = mode;
+    if (mode === 'pong') pong = createPong();
+    try { sessionStorage.setItem('wobble.game', mode); } catch (e) {}
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'mode', game: mode }));
+    canvas.classList.toggle('party', mode === 'wobble' && party);
+    updateUI();
+  }
+
+  function servePong(side) {
+    if (gameMode !== 'pong' || !pong.waitingForServe || pong.winner != null || side !== pong.servingSide) return;
+    const direction = side === 0 ? 1 : -1;
+    const angle = rand(-0.32, 0.32);
+    const speed = 360;
+    pong.ball = { x: W / 2, y: H / 2, vx: Math.cos(angle) * speed * direction, vy: Math.sin(angle) * speed };
+    pong.waitingForServe = false;
+  }
+
+  function chargePong(side) {
+    if (gameMode !== 'pong' || side < 0 || side > 1 || pong.winner != null || pong.charged[side]) return;
+    if (pong.powerCooldowns[side] > 0) {
+      toast(`P${side + 1}: power shot ready in ${pong.powerCooldowns[side].toFixed(1)}s`);
+      return;
+    }
+    pong.charged[side] = true;
+    toast(`P${side + 1}: power shot ready`);
+  }
+
+  function updatePong(dt) {
+    const now = performance.now();
+    for (let side = 0; side < 2; side++) pong.powerCooldowns[side] = Math.max(0, pong.powerCooldowns[side] - dt);
+    for (const point of pong.powerTrail) point.life -= dt;
+    pong.powerTrail = pong.powerTrail.filter((point) => point.life > 0);
+    const phoneLeft = players.get(0);
+    const phoneRight = players.get(1);
+    const keyboard = players.get('kb');
+    const controlled = (p) => p && p.connected && now - p.lastFrame <= 1000;
+    const keyboardMovement = Number(keys.has('s')) - Number(keys.has('w'));
+
+    for (let side = 0; side < 2; side++) {
+      const phone = side === 0 ? phoneLeft : phoneRight;
+      if (controlled(phone)) {
+        const target = H / 2 + phone.input.y * (H / 2 - PADDLE_H / 2 - 12);
+        const difference = target - pong.paddles[side];
+        // Filter small sensor fluctuations from the second phone without slowing larger movements much.
+        if (side === 0 || Math.abs(difference) > 5) {
+          const follow = 1 - Math.exp(-dt * (side === 1 ? 18 : 30));
+          pong.paddles[side] += difference * follow;
+        }
+        continue;
+      } else if (side === 0 && keyboard?.connected) {
+        pong.paddles[side] += keyboardMovement * 520 * dt;
+        continue;
+      }
+
+      // The CPU tracks only while the ball is coming toward it, then holds its position after a hit.
+      const tracking = side === 0 ? pong.ball.vx < 0 : pong.ball.vx > 0;
+      if (!tracking) continue;
+      const distance = pong.ball.y - pong.paddles[side];
+      pong.paddles[side] += Math.sign(distance) * Math.min(Math.abs(distance), 360 * dt);
+    }
+    for (let side = 0; side < 2; side++) {
+      pong.paddles[side] = Math.max(PADDLE_H / 2 + 12, Math.min(H - PADDLE_H / 2 - 12, pong.paddles[side]));
+    }
+
+    if (pong.waitingForServe || pong.winner != null) return;
+    const ball = pong.ball;
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+    pong.trail.push({ x: ball.x, y: ball.y });
+    if (pong.trail.length > 8) pong.trail.shift();
+    if (pong.powerTrailTime > 0) {
+      pong.powerTrailTime = Math.max(0, pong.powerTrailTime - dt);
+      pong.powerTrail.push({ x: ball.x, y: ball.y, life: PONG_POWER_TRAIL_TIME });
+      if (pong.powerTrail.length > 24) pong.powerTrail.shift();
+    }
+
+    if (ball.y < PONG_BALL_R) { ball.y = PONG_BALL_R; ball.vy = Math.abs(ball.vy); }
+    if (ball.y > H - PONG_BALL_R) { ball.y = H - PONG_BALL_R; ball.vy = -Math.abs(ball.vy); }
+
+    for (let side = 0; side < 2; side++) {
+      const paddleX = side === 0 ? PADDLE_INSET : W - PADDLE_INSET;
+      const toward = side === 0 ? ball.vx < 0 : ball.vx > 0;
+      const near = side === 0 ? ball.x - PONG_BALL_R <= paddleX + PADDLE_W / 2 : ball.x + PONG_BALL_R >= paddleX - PADDLE_W / 2;
+      if (!toward || !near || Math.abs(ball.y - pong.paddles[side]) > PADDLE_H / 2 + PONG_BALL_R) continue;
+
+      const offset = Math.max(-1, Math.min(1, (ball.y - pong.paddles[side]) / (PADDLE_H / 2)));
+      const direction = side === 0 ? 1 : -1;
+      // Each paddle return speeds up the rally; charged returns add a bigger boost.
+      const currentSpeed = Math.min(900, Math.hypot(ball.vx, ball.vy) * (pong.charged[side] ? 1.24 : 1.08));
+      const angle = offset * 0.9;
+      ball.x = side === 0 ? paddleX + PADDLE_W / 2 + PONG_BALL_R : paddleX - PADDLE_W / 2 - PONG_BALL_R;
+      ball.vx = Math.cos(angle) * currentSpeed * direction;
+      ball.vy = Math.sin(angle) * currentSpeed;
+      pong.trail.length = 0;
+      if (pong.charged[side]) {
+        pong.charged[side] = false;
+        pong.powerCooldowns[side] = PONG_POWER_COOLDOWN;
+        pong.powerTrail.length = 0;
+        pong.powerTrailTime = PONG_POWER_TRAIL_TIME;
+        pong.powerTrailColor = side === 0 ? '#60a5fa' : '#fb7185';
+        haptic(players.get(side), 'level');
+      }
+    }
+
+    if (ball.x < -PONG_BALL_R) scorePong(1, 0);
+    else if (ball.x > W + PONG_BALL_R) scorePong(0, 1);
+  }
+
+  function scorePong(side, nextServe) {
+    pong.scores[side]++;
+    pong.charged = [false, false];
+    pong.trail.length = 0;
+    if (pong.scores[side] >= 5) {
+      pong.winner = side;
+      pong.ball.vx = 0; pong.ball.vy = 0;
+      toast(`Player ${side + 1} wins! First to 5.`, true);
+      return;
+    }
+    pong.servingSide = nextServe;
+    pong.waitingForServe = true;
+    pong.ball = { x: W / 2, y: H / 2, vx: 0, vy: 0 };
+    toast(`Player ${side + 1} scores`);
+  }
+
   let ws = null;
   function haptic(p, kind) { // ask the phone to vibrate
     if (p.key !== 'kb' && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'haptic', p: p.key, kind }));
@@ -221,6 +374,7 @@
   }
 
   function update(dt) {
+    if (gameMode === 'pong') { updatePong(dt); return; }
     const now = performance.now();
     for (const p of players.values()) if (p.connected) updatePlayer(p, dt, now);
     if (stars.length && stars.every((s) => s.got)) {
@@ -280,7 +434,105 @@
     g.globalAlpha = 1;
   }
 
+  function drawPong() {
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = '#0b1220';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#10283a';
+    g.fillRect(18, 18, W - 36, H - 36);
+    g.strokeStyle = '#31506a';
+    g.lineWidth = 2;
+    g.strokeRect(18, 18, W - 36, H - 36);
+
+    g.setLineDash([10, 12]);
+    g.strokeStyle = '#38536a';
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(W / 2, 26); g.lineTo(W / 2, H - 26); g.stroke();
+    g.setLineDash([]);
+
+    const left = players.get(0);
+    const right = players.get(1);
+    const keyboard = players.get('kb');
+    const labels = [left?.connected ? 'PLAYER 1 · PHONE' : keyboard?.connected ? 'PLAYER 1 · KEYBOARD' : 'PLAYER 1 · CPU', right?.connected ? 'PLAYER 2 · PHONE' : 'PLAYER 2 · CPU'];
+    g.textAlign = 'center';
+    g.fillStyle = '#a8bbce';
+    g.font = '700 13px system-ui, sans-serif';
+    g.fillText(labels[0], W * 0.25, 72);
+    g.fillText(labels[1], W * 0.75, 72);
+    g.fillStyle = '#f8fafc';
+    g.font = '700 48px system-ui, sans-serif';
+    g.fillText(String(pong.scores[0]), W * 0.25, 128);
+    g.fillText(String(pong.scores[1]), W * 0.75, 128);
+    g.fillStyle = '#8298ad';
+    g.font = '600 13px system-ui, sans-serif';
+    g.fillText('FIRST TO 5', W / 2, 52);
+
+    for (let side = 0; side < 2; side++) {
+      const x = side === 0 ? PADDLE_INSET : W - PADDLE_INSET;
+      const y = pong.paddles[side] - PADDLE_H / 2;
+      g.fillStyle = side === 0 ? '#60a5fa' : '#fb7185';
+      g.beginPath();
+      g.roundRect(x - PADDLE_W / 2, y, PADDLE_W, PADDLE_H, 7);
+      g.fill();
+      if (pong.charged[side]) {
+        g.fillStyle = side === 0 ? '#93c5fd' : '#fda4af';
+        g.font = '700 11px system-ui, sans-serif';
+        g.fillText('POWER READY', x, y - 12);
+      } else if (pong.powerCooldowns[side] > 0) {
+        g.fillStyle = '#8298ad';
+        g.font = '700 10px system-ui, sans-serif';
+        g.fillText(`POWER ${pong.powerCooldowns[side].toFixed(1)}s`, x, y - 12);
+      }
+    }
+
+    for (let i = 0; i < pong.trail.length; i++) {
+      const point = pong.trail[i];
+      g.globalAlpha = (i + 1) / pong.trail.length * 0.28;
+      g.fillStyle = '#e2e8f0';
+      g.beginPath(); g.arc(point.x, point.y, PONG_BALL_R * (0.35 + i / pong.trail.length * 0.55), 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+    for (let i = 0; i < pong.powerTrail.length; i++) {
+      const point = pong.powerTrail[i];
+      const strength = point.life / PONG_POWER_TRAIL_TIME;
+      g.globalAlpha = strength * 0.72;
+      g.shadowColor = pong.powerTrailColor;
+      g.shadowBlur = 18 * strength;
+      g.fillStyle = pong.powerTrailColor;
+      g.beginPath();
+      g.arc(point.x, point.y, PONG_BALL_R * (0.45 + strength * 0.55), 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+    g.shadowBlur = 0;
+    g.shadowColor = '#e2e8f0';
+    g.shadowBlur = 16;
+    g.fillStyle = '#f8fafc';
+    g.beginPath(); g.arc(pong.ball.x, pong.ball.y, PONG_BALL_R, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0;
+
+    g.textAlign = 'center';
+    if (pong.winner != null) {
+      g.fillStyle = '#f8fafc';
+      g.font = '700 22px system-ui, sans-serif';
+      g.fillText(`PLAYER ${pong.winner + 1} WINS`, W / 2, H - 58);
+      g.fillStyle = '#a8bbce';
+      g.font = '500 14px system-ui, sans-serif';
+      g.fillText('Choose Ping Pong again to start a rematch', W / 2, H - 34);
+    } else if (pong.waitingForServe) {
+      g.fillStyle = '#dbeafe';
+      g.font = '700 16px system-ui, sans-serif';
+      g.fillText(`PLAYER ${pong.servingSide + 1} · TAP JUMP TO SERVE`, W / 2, H - 48);
+    } else {
+      g.fillStyle = '#7890a6';
+      g.font = '500 13px system-ui, sans-serif';
+      g.fillText('Tilt to move · DASH charges your next hit', W / 2, H - 28);
+    }
+    g.textAlign = 'left';
+  }
+
   function draw() {
+    if (gameMode === 'pong') { drawPong(); return; }
     g.clearRect(0, 0, W, H);
     g.strokeStyle = '#16213a'; g.lineWidth = 1;
     for (let x = 0; x <= W; x += 50) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
@@ -320,6 +572,22 @@
   function renderScoreboard() {
     const box = el('scoreboard');
     box.textContent = '';
+    if (gameMode === 'pong') {
+      for (let side = 0; side < 2; side++) {
+        const phone = players.get(side);
+        const keyboard = players.get('kb');
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (phone?.connected || keyboard?.connected ? '' : ' off');
+        const dot = document.createElement('span');
+        dot.className = 'dot'; dot.style.background = side === 0 ? '#60a5fa' : '#fb7185';
+        const name = document.createElement('b'); name.textContent = `Player ${side + 1}`;
+        const stat = document.createElement('span'); stat.className = 'stat';
+        stat.textContent = `${phone?.connected ? 'phone' : side === 0 && keyboard?.connected ? 'keyboard' : 'CPU'} · ${pong.scores[side]} points`;
+        chip.append(dot, name, stat);
+        box.append(chip);
+      }
+      return;
+    }
     const list = [...players.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)));
     for (const p of list) {
       const chip = document.createElement('div');
@@ -337,10 +605,16 @@
   }
 
   function updateUI() {
+    el('wobbleTab').setAttribute('aria-pressed', String(gameMode === 'wobble'));
+    el('pongTab').setAttribute('aria-pressed', String(gameMode === 'pong'));
+    el('help').textContent = gameMode === 'pong'
+      ? 'Two phones play head to head; one phone or W/S plays against the computer. Tilt to move your paddle · JUMP serves · DASH charges a power shot (4s cooldown).'
+      : 'Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash';
     el('dotServer').className = 'dot' + (net.ws ? ' ok' : ' warn');
     el('txtServer').textContent = 'Server: ' + (net.ws ? 'connected' + (net.rtt != null ? ` (${net.rtt} ms)` : '') : 'reconnecting…');
-    el('pillPlayers').textContent = `Players: ${phonePlayers().length}/${MAX_PLAYERS}`;
+    el('pillPlayers').textContent = `Players: ${phonePlayers().length}/${gameMode === 'pong' ? 2 : MAX_PLAYERS}`;
     el('pillRoom').textContent = 'Room: ' + (roomInfo ? roomInfo.room : '-');
+    el('joinBtn').textContent = gameMode === 'pong' ? '+ Add opponent (QR)' : '+ Add player (QR)';
     el('joinBtn').classList.toggle('hidden', !net.ws);
 
     overlay.classList.toggle('hidden', !overlayVisible());
@@ -355,21 +629,26 @@
       el('ovTitle').textContent = 'Connecting to server…';
       el('ovMsg').textContent = 'Make sure the server is running (npm start). Retrying automatically.';
     } else if (net.showJoin) {
-      el('ovTitle').textContent = 'Add a player';
+      el('ovTitle').textContent = gameMode === 'pong' ? 'Add an opponent' : 'Add a player';
       el('ovMsg').textContent = `Scan with the app on another phone (up to ${MAX_PLAYERS}), or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
     } else {
-      el('ovTitle').textContent = net.everPaired ? 'All phones disconnected' : 'Pair your phone';
+      el('ovTitle').textContent = net.everPaired ? 'All phones disconnected' : gameMode === 'pong' ? 'Pair a phone to play' : 'Pair your phone';
       el('ovMsg').textContent = net.everPaired
         ? 'Game paused. The apps reconnect automatically, or scan the QR code again.'
         : `Open the app and scan this QR code, or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
     }
+    el('kbBtn').textContent = gameMode === 'pong' ? 'Play solo vs computer' : 'Play with keyboard instead (testing)';
     renderScoreboard();
   }
 
   // ---------- networking ----------
   let retry = 0, pingTimer = null, reconnectTimer = null;
 
-  const API_BASE = 'https://game-controller-wobble.onrender.com';
+  const localHost = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ||
+    /^10\./.test(location.hostname) || /^192\.168\./.test(location.hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(location.hostname);
+  const API_BASE = new URLSearchParams(location.search).get('api') ||
+    (localHost ? location.origin : 'https://game-controller-wobble.onrender.com');
 
   async function ensureRoom() {
     const saved = sessionStorage.getItem('room') || '';
@@ -408,6 +687,8 @@
       switch (m.type) {
         case 'joined': {
           net.ws = true; retry = 0;
+          if (m.game === 'pong' || m.game === 'wobble') setGameMode(m.game);
+          else mine.send(JSON.stringify({ type: 'mode', game: gameMode }));
           const listed = new Set();
           for (const info of m.players || []) {
             ensurePlayer(info.slot, info.color).connected = true;
@@ -436,10 +717,12 @@
           if (p) { p.input.x = m.x || 0; p.input.y = m.y || 0; p.lastFrame = performance.now(); p.frames++; }
           break;
         }
-        case 'jump': jump(players.get(m.p)); break;
+        case 'jump': gameMode === 'pong' ? servePong(m.p) : jump(players.get(m.p)); break;
         case 'btn': {
           const p = players.get(m.p);
-          if (m.name === 'dash') dash(p); else if (m.name === 'jump') jump(p);
+          if (gameMode === 'pong') {
+            if (m.name === 'dash') chargePong(m.p); else if (m.name === 'jump') servePong(m.p);
+          } else if (m.name === 'dash') dash(p); else if (m.name === 'jump') jump(p);
           break;
         }
         case 'lat': {
@@ -471,8 +754,8 @@
     const k = e.key.toLowerCase();
     const kb = players.get('kb');
     eggKey(k);
-    if (k === ' ') { jump(kb); e.preventDefault(); return; }
-    if (k === 'shift') { dash(kb); return; }
+    if (k === ' ') { gameMode === 'pong' ? servePong(0) : jump(kb); e.preventDefault(); return; }
+    if (k === 'shift') { gameMode === 'pong' ? chargePong(0) : dash(kb); return; }
     if (k.startsWith('arrow')) e.preventDefault();
     keys.add(k);
   });
@@ -484,6 +767,8 @@
   });
   el('joinBtn').addEventListener('click', () => { net.showJoin = true; updateUI(); });
   el('resumeBtn').addEventListener('click', () => { net.showJoin = false; updateUI(); });
+  el('wobbleTab').addEventListener('click', () => setGameMode('wobble'));
+  el('pongTab').addEventListener('click', () => setGameMode('pong'));
 
   // ================= easter eggs =================
   const CLUB_NAME = 'VinnovateIT';

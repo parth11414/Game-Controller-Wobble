@@ -7,7 +7,7 @@ export const CONFIG = {
   updateMs: 16,          // ~60 Hz sensor updates
   maxTiltRad: 0.6,       // tilt that maps to full deflection (~34 degrees)
   deadzone: 0.05,        // ignore tiny tilts around neutral
-  smoothing: 0.35,       // low-pass filter: 1 = no smoothing, lower = smoother but laggier
+  smoothing: 0.5,        // responsive sensor filter; the browser smooths Pong paddle targets
   shakeG: 1.8,           // accelerometer magnitude (in g) that counts as a shake
   shakeCooldownMs: 700,  // minimum time between jumps
   invertX: false,        // flip if steering feels backwards

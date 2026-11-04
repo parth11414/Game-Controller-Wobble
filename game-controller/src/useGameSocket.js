@@ -32,6 +32,7 @@ export function useGameSocket() {
   const [laptopOnline, setLaptopOnline] = useState(false);
   const [error, setError] = useState(null);
   const [player, setPlayer] = useState(null); // { slot, color } assigned by the server
+  const [game, setGame] = useState('wobble');
 
   const wsRef = useRef(null);
   const cfgRef = useRef(null); // { server, room }
@@ -120,6 +121,7 @@ export function useGameSocket() {
           setError(null);
           setLaptopOnline(!!msg.laptop);
           setPlayer({ slot: msg.slot, color: msg.color });
+          if (msg.game === 'pong' || msg.game === 'wobble') setGame(msg.game);
           setStatus('connected');
           clearInterval(pingTimer.current);
           pingTimer.current = setInterval(() => {
@@ -140,6 +142,9 @@ export function useGameSocket() {
           break;
         case 'peer': // laptop joined/left the room
           setLaptopOnline(!!msg.connected);
+          break;
+        case 'mode':
+          if (msg.game === 'pong' || msg.game === 'wobble') setGame(msg.game);
           break;
         case 'error':
           if (!everJoinedRef.current) giveUp(msg.message || 'Could not join that room.');
@@ -194,5 +199,5 @@ export function useGameSocket() {
     teardown();
   }, []);
 
-  return { status, latency, laptopOnline, error, player, connect, disconnect, send };
+  return { status, latency, laptopOnline, error, player, game, connect, disconnect, send };
 }

@@ -53,7 +53,7 @@ function StatusBadge({ status, latency, laptopOnline }) {
   );
 }
 
-export default function ControllerScreen({ room, status, latency, laptopOnline, player, send, onLeave }) {
+export default function ControllerScreen({ room, status, latency, laptopOnline, player, game = 'wobble', send, onLeave }) {
   useKeepAwake(); // don't let the screen sleep mid-game
 
   const { tilt, calibrate } = useMotionController({
@@ -98,7 +98,7 @@ export default function ControllerScreen({ room, status, latency, laptopOnline, 
             ]}
           />
         </View>
-        <Text style={styles.hint}>Tilt to steer · shake to jump</Text>
+        <Text style={styles.hint}>{game === 'pong' ? 'Tilt to move · tap SERVE · POWER charges your next hit' : 'Tilt to steer · shake to jump'}</Text>
       </View>
 
       <View style={styles.buttons}>
@@ -106,13 +106,13 @@ export default function ControllerScreen({ room, status, latency, laptopOnline, 
           style={({ pressed }) => [styles.bigBtn, { backgroundColor: accent }, pressed && styles.pressed]}
           onPressIn={() => press({ type: 'btn', name: 'jump' })}
         >
-          <Text style={styles.bigText}>JUMP</Text>
+          <Text style={styles.bigText}>{game === 'pong' ? 'SERVE' : 'JUMP'}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.bigBtn, styles.dashBtn, pressed && styles.pressed]}
           onPressIn={() => press({ type: 'btn', name: 'dash' })}
         >
-          <Text style={styles.bigText}>DASH</Text>
+          <Text style={styles.bigText}>{game === 'pong' ? 'POWER' : 'DASH'}</Text>
         </Pressable>
       </View>
 
