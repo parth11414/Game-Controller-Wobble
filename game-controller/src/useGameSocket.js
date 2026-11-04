@@ -6,7 +6,7 @@ const PONG_TIMEOUT_MS = 8000; // no pong for this long => connection is dead (ev
 const BACKOFF_MIN_MS = 500;
 const BACKOFF_MAX_MS = 5000;
 const MAX_FIRST_ATTEMPTS = 3; // if we've never joined, give up after this many retries
-const MAX_BUFFERED_BYTES = 2048; // drop sensor frames instead of queueing them (keeps latency low)
+const MAX_BUFFERED_BYTES = 512; // drop stale sensor frames instead of queueing delayed movement
 
 // Stable id for this app launch, so a reconnecting phone gets the same player slot back.
 const PID = Math.random().toString(36).slice(2, 10);
