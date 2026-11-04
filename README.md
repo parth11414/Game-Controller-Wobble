@@ -16,7 +16,7 @@ The system is designed to support multiple players, connection-status monitoring
 
 - **Motion-based controls:** Control the game by tilting a smartphone.
 - **Game selection:** Choose between WOBBLE and Ping Pong from the browser.
-- **Ping Pong:** Play to five points with two phones, or use one phone against the computer. Tilt to move the paddle, use JUMP to serve, and use DASH to charge the next hit.
+- **Ping Pong:** Play to five points with two phones, or use one phone against the computer. Tilt to move the paddle, press SERVE to serve, and press POWER to charge the next hit.
 - **QR code and room-code pairing:** Connect a mobile controller to the correct game session.
 - **Real-time communication:** Exchange controller inputs and game-session messages using WebSockets.
 - **Motion calibration:** Establish a neutral reference position to make controls more consistent.
@@ -253,6 +253,6 @@ Core pairing, motion-control, calibration, cross-network, and reconnection check
 - **Source code:** Available in this repository.
 - **Browser game:** https://game-controller-wobble-game.vercel.app/
 - **Backend:** https://game-controller-wobble.onrender.com/
-- **Android APK:** (-)
+- **Android APK:** https://expo.dev/accounts/parthhh_987/projects/game-controller/builds/19ccd517-cb61-4a90-a630-7759eb3e2fba
 - **Demonstration video:** https://drive.google.com/file/d/13JTG351-xbN2V65gT1RyRGuk-DWXmOXA/view?usp=sharing
 

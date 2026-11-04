@@ -522,11 +522,11 @@
     } else if (pong.waitingForServe) {
       g.fillStyle = '#dbeafe';
       g.font = '700 16px system-ui, sans-serif';
-      g.fillText(`PLAYER ${pong.servingSide + 1} · TAP JUMP TO SERVE`, W / 2, H - 48);
+      g.fillText(`PLAYER ${pong.servingSide + 1} · PRESS SERVE TO START`, W / 2, H - 48);
     } else {
       g.fillStyle = '#7890a6';
       g.font = '500 13px system-ui, sans-serif';
-      g.fillText('Tilt to move · DASH charges your next hit', W / 2, H - 28);
+      g.fillText('Tilt to move · SERVE starts play · POWER charges your next hit', W / 2, H - 28);
     }
     g.textAlign = 'left';
   }
@@ -608,7 +608,7 @@
     el('wobbleTab').setAttribute('aria-pressed', String(gameMode === 'wobble'));
     el('pongTab').setAttribute('aria-pressed', String(gameMode === 'pong'));
     el('help').textContent = gameMode === 'pong'
-      ? 'Two phones play head to head; one phone or W/S plays against the computer. Tilt to move your paddle · JUMP serves · DASH charges a power shot (4s cooldown).'
+      ? 'Two phones play head to head; one phone or W/S plays against the computer. Tilt to move · press SERVE to serve · press POWER to charge your next hit (4s cooldown).'
       : 'Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash';
     el('dotServer').className = 'dot' + (net.ws ? ' ok' : ' warn');
     el('txtServer').textContent = 'Server: ' + (net.ws ? 'connected' + (net.rtt != null ? ` (${net.rtt} ms)` : '') : 'reconnecting…');

@@ -98,7 +98,7 @@ export default function ControllerScreen({ room, status, latency, laptopOnline, 
             ]}
           />
         </View>
-        <Text style={styles.hint}>{game === 'pong' ? 'Tilt to move · tap SERVE · POWER charges your next hit' : 'Tilt to steer · shake to jump'}</Text>
+        <Text style={styles.hint}>{game === 'pong' ? 'Tilt to move · press SERVE to serve · press POWER to charge your next hit' : 'Tilt to steer · shake to jump'}</Text>
       </View>
 
       <View style={styles.buttons}>
