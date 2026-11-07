@@ -323,10 +323,9 @@
       if (controlled(phone)) {
         const target = H / 2 + phone.input.y * (H / 2 - PADDLE_H / 2 - 12);
         const difference = target - pong.paddles[side];
-        // Filter small sensor fluctuations from the second phone without slowing larger movements much.
+        // The controller app already filters sensor noise; avoid adding a second movement delay here.
         if (side === 0 || Math.abs(difference) > 5) {
-          const follow = 1 - Math.exp(-dt * (side === 1 ? 18 : 30));
-          pong.paddles[side] += difference * follow;
+          pong.paddles[side] = target;
         }
         continue;
       } else if (side === 0 && keyboard?.connected) {

@@ -25,7 +25,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'game');
 const ROOM_TTL_MS = 10 * 60 * 1000;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // Drop stale sensor frames quickly instead of letting network congestion queue seconds of input.
-const MAX_LAPTOP_BUFFER = 512;
+const MAX_LAPTOP_BUFFER = 128;
 const COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b'];
 const MAX_PLAYERS = COLORS.length;
 
