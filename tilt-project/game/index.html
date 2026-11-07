@@ -3,88 +3,180 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WOBBLE — Phone-Controlled Game</title>
+<title>WOBBLE Arcade — Play together</title>
 <style>
-  :root { color-scheme: dark; --bg:#0b1220; --panel:#111a2e; --text:#f8fafc; --muted:#94a3b8; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#3b82f6; }
-  * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:system-ui,"Segoe UI",Roboto,sans-serif; display:flex; flex-direction:column; align-items:center; padding:16px; gap:12px; }
-  header { width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
-  h1 { margin:0; font-size:20px; }
-  .game-switch { display:flex; gap:4px; padding:4px; border:1px solid #263550; border-radius:12px; background:#111a2e; }
-  .game-tab { padding:8px 12px; border-radius:8px; background:transparent; color:#94a3b8; }
-  .game-tab[aria-pressed="true"] { background:#243451; color:#f8fafc; }
-  .game-tab:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
-  .pills { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .pill { background:var(--panel); border-radius:999px; padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:6px; }
-  .dot { width:10px; height:10px; border-radius:50%; background:var(--bad); flex:none; }
-  .dot.ok { background:var(--ok); }
-  .dot.warn { background:var(--warn); }
-  .scoreboard { width:100%; max-width:900px; display:flex; gap:8px; flex-wrap:wrap; min-height:34px; }
-  .chip { background:var(--panel); border-radius:10px; padding:6px 12px; font-size:13px; display:flex; align-items:center; gap:8px; }
-  .chip.off { opacity:.45; }
-  .chip b { font-weight:700; }
-  .chip .stat { color:var(--muted); font-variant-numeric:tabular-nums; }
-  .stage { position:relative; width:100%; max-width:900px; }
-  canvas { width:100%; height:auto; display:block; background:#0f172a; border:2px solid #1e293b; border-radius:16px; }
-  .overlay { position:absolute; inset:0; background:rgba(11,18,32,.93); border-radius:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:20px; }
+  :root { color-scheme:light; --paper:#f4ead7; --paper-deep:#e9dcc2; --ink:#152821; --forest:#176b4b; --forest-dark:#104a36; --coral:#ef5a3a; --butter:#f4cc59; --mint:#85d5ad; --cobalt:#3b82f6; --muted:#53665a; --line:#c9bda5; --white:#fffaf0; --ok:#278454; --warn:#ad5b22; --shadow:0 18px 44px rgba(40,46,31,.13); }
+  [data-theme="dark"] { color-scheme:dark; --paper:#101b18; --paper-deep:#182a24; --ink:#f5edda; --forest:#1b6348; --forest-dark:#0e3d2d; --coral:#ff7050; --butter:#ffd86f; --mint:#94e2b7; --cobalt:#60a5fa; --muted:#bac9ba; --line:#385044; --white:#18241f; --ok:#59ca87; --warn:#f1a35f; --shadow:0 18px 44px rgba(0,0,0,.34); }
+  [data-theme="dark"] .game-tab[aria-pressed="true"] { color:#fffaf0; background:#b83e2d; }
+  [data-theme="dark"] .game-tab[aria-pressed="true"] .tab-icon { color:#152821; background:#fffaf0; }
+  * { box-sizing:border-box; }
+  html { min-width:320px; background:var(--paper); scrollbar-color:var(--forest) var(--paper-deep); }
+  body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font-family:"Trebuchet MS",Verdana,sans-serif; font-size:15px; line-height:1.45; }
+  ::selection { color:var(--ink); background:var(--butter); }
+  button { color:inherit; font:inherit; }
+  button:focus-visible { outline:3px solid var(--cobalt); outline-offset:3px; }
+  .site-shell { width:min(1540px,100% - 48px); margin:0 auto; }
+  .topbar { display:grid; grid-template-columns:minmax(180px,1fr) auto minmax(270px,1fr); align-items:center; gap:22px; padding:22px 0 19px; border-bottom:1px solid var(--line); }
+  .brand { display:inline-flex; align-items:center; gap:11px; width:max-content; padding:0; border:0; color:var(--ink); background:transparent; cursor:pointer; }
+  .brand-mark { display:grid; place-items:center; width:42px; height:42px; color:var(--paper); background:var(--coral); border-radius:13px 13px 13px 4px; font-family:Georgia,serif; font-size:25px; font-weight:900; font-style:italic; transform:rotate(-4deg); }
+  .brand-word { font-family:Georgia,"Times New Roman",serif; font-size:30px; line-height:1; font-weight:900; font-style:italic; letter-spacing:-.035em; }
+  .brand-note { display:block; margin-top:4px; color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+  .game-switch { display:flex; align-items:center; gap:5px; padding:5px; border:1px solid var(--ink); border-radius:15px; background:var(--paper-deep); }
+  .game-tab { display:flex; align-items:center; gap:9px; min-height:46px; padding:0 18px; border:0; border-radius:11px; color:var(--muted); background:transparent; font-size:13px; font-weight:900; letter-spacing:.045em; cursor:pointer; transition:background .22s cubic-bezier(.16,1,.3,1),color .22s cubic-bezier(.16,1,.3,1),transform .22s cubic-bezier(.16,1,.3,1); }
+  .game-tab:hover { transform:translateY(-1px); color:var(--ink); }
+  .game-tab[aria-pressed="true"] { color:var(--paper); background:var(--coral); box-shadow:0 3px 0 rgba(21,40,33,.2); }
+  .tab-icon { display:grid; place-items:center; width:24px; height:24px; color:var(--ink); background:var(--butter); border-radius:8px; }
+  .tab-icon svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .game-tab[aria-pressed="true"] .tab-icon { color:var(--ink); background:var(--paper); }
+  .header-tools { display:flex; justify-content:flex-end; align-items:center; gap:9px; }
+  .theme-toggle { display:grid; place-items:center; flex:none; width:40px; height:40px; padding:0; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:var(--white); cursor:pointer; transition:transform .2s cubic-bezier(.16,1,.3,1),background .2s ease; }
+  .theme-toggle:hover { transform:translateY(-2px); background:var(--paper-deep); }
+  .theme-toggle:focus-visible { outline:3px solid var(--cobalt); outline-offset:3px; }
+  .theme-toggle svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .pill { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border:1px solid var(--line); border-radius:999px; color:var(--ink); background:var(--white); font-size:12px; font-weight:800; white-space:nowrap; }
+  .dot { width:9px; height:9px; flex:none; border-radius:50%; background:var(--coral); box-shadow:0 0 0 3px rgba(239,90,58,.15); }
+  .dot.ok { background:var(--ok); box-shadow:0 0 0 3px rgba(39,132,84,.16); }
+  .dot.warn { background:var(--warn); box-shadow:0 0 0 3px rgba(173,91,34,.15); }
+  .action-button { display:inline-flex; justify-content:center; align-items:center; min-height:42px; padding:0 16px; border:1px solid var(--ink); border-radius:12px; color:var(--paper); background:var(--ink); font-size:12px; font-weight:900; letter-spacing:.025em; cursor:pointer; transition:transform .2s cubic-bezier(.16,1,.3,1),background .2s ease,box-shadow .2s ease; }
+  .action-button:hover { transform:translateY(-2px); background:var(--forest); box-shadow:0 8px 18px rgba(21,40,33,.18); }
+  .action-button.secondary { color:var(--ink); background:transparent; }
+  .action-button.secondary:hover { color:#f4ead7; background:var(--forest); }
+  main { padding:28px 0 42px; }
+  .intro-row { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:18px; }
+  .intro-row h1 { margin:0; font-family:Georgia,"Times New Roman",serif; font-size:clamp(28px,3vw,41px); line-height:1; letter-spacing:-.035em; }
+  .intro-row p { max-width:40ch; margin:0 0 2px; color:var(--muted); font-size:13px; }
+  .scoreboard { display:flex; align-items:stretch; gap:8px; min-height:0; margin:0 0 12px; overflow-x:auto; scrollbar-width:thin; }
+  .chip { display:flex; align-items:center; gap:10px; min-width:max-content; padding:9px 13px; border:1px solid var(--line); border-radius:12px; background:var(--white); }
+  .chip.off { opacity:.48; }
+  .chip b { font-size:12px; font-weight:900; }
+  .chip .dot { width:11px; height:11px; box-shadow:none; }
+  .chip .stat { color:var(--muted); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .score-chip { --player-color:var(--cobalt); min-height:70px; gap:9px; padding:7px 12px; }
+  .score-chip .player-name { font-size:12px; white-space:nowrap; }
+  .score-value { display:grid; place-items:center; min-width:48px; min-height:48px; padding:0 8px; border:2px solid var(--player-color); border-radius:12px; color:var(--ink); background:var(--paper); font-size:31px; line-height:1; font-weight:1000; font-variant-numeric:tabular-nums; }
+  .score-label { color:var(--muted); font-size:9px; line-height:1.1; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+  .score-chip .score-detail { padding-left:10px; border-left:1px solid var(--line); white-space:nowrap; }
+  .play-layout { display:grid; grid-template-columns:minmax(0,1fr) 304px; align-items:stretch; gap:16px; }
+  .play-column { min-width:0; }
+  .stage-shell { overflow:hidden; border:1px solid var(--ink); border-radius:18px; background:var(--forest-dark); box-shadow:var(--shadow); }
+  .stage-bar { display:flex; justify-content:space-between; align-items:center; gap:12px; min-height:45px; padding:0 15px; color:#f4ead7; background:var(--forest-dark); }
+  .stage-label { display:flex; align-items:center; gap:9px; font-size:11px; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+  .stage-label .dot { width:8px; height:8px; background:var(--mint); box-shadow:0 0 0 3px rgba(133,213,173,.16); }
+  .stage-hint { color:#d1e4d4; font-size:11px; font-weight:700; }
+  .stage { width:100%; overflow:hidden; background:#5cae7c; }
+  canvas { width:100%; height:auto; display:block; aspect-ratio:45/28; }
+  .help { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:13px 3px 0; color:var(--muted); font-size:12px; font-weight:700; }
+  .help b { color:var(--ink); }
+  .pairing-panel { display:flex; flex-direction:column; min-width:0; padding:21px; border:1px solid var(--ink); border-radius:18px; background:var(--white); box-shadow:var(--shadow); transition:box-shadow .25s ease,transform .25s cubic-bezier(.16,1,.3,1); }
+  .pairing-panel.is-spotlit { box-shadow:0 0 0 4px rgba(239,90,58,.2),var(--shadow); transform:translateY(-2px); }
+  .pairing-top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .pairing-top h2 { margin:0; font-family:Georgia,"Times New Roman",serif; font-size:24px; line-height:1.05; letter-spacing:-.025em; }
+  .pairing-state { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+  .pairing-copy { min-height:52px; margin:10px 0 15px; color:var(--muted); font-size:12px; line-height:1.5; }
+  .qr-frame { display:grid; place-items:center; min-height:188px; padding:13px; border:1px solid var(--line); border-radius:14px; background:#fff; }
+  .qr-frame img { display:block; width:min(100%,158px); aspect-ratio:1; object-fit:contain; image-rendering:pixelated; }
+  .qr-placeholder { display:grid; place-items:center; width:142px; aspect-ratio:1; color:var(--muted); background:var(--paper); border:1px dashed var(--line); border-radius:9px; font-size:11px; font-weight:800; text-align:center; }
+  .room-label { margin:16px 0 5px; color:var(--muted); font-size:10px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+  .room-code { min-height:54px; color:var(--ink); font-family:Georgia,"Times New Roman",serif; font-size:39px; font-weight:900; line-height:1.25; letter-spacing:.14em; font-variant-numeric:tabular-nums; }
+  .pairing-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .pairing-actions .action-button { flex:1; }
+  .pairing-foot { display:flex; align-items:flex-start; gap:9px; margin-top:auto; padding-top:20px; color:var(--muted); font-size:11px; line-height:1.45; }
+  .phone-mark { display:grid; place-items:center; flex:none; width:22px; height:30px; border:2px solid var(--forest); border-radius:6px; color:var(--forest); font-size:9px; font-weight:900; }
   .hidden { display:none !important; }
-  .overlay img { width:220px; height:220px; background:#fff; border-radius:12px; padding:6px; }
-  .title { font-size:24px; font-weight:700; }
-  .code { font-size:40px; font-weight:800; letter-spacing:10px; padding-left:10px; }
-  .muted { color:var(--muted); font-size:14px; max-width:520px; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; }
-  button.small { padding:6px 12px; font-size:13px; }
-  button.ghost { background:transparent; border:1px solid #334155; color:var(--muted); }
-  .help { color:var(--muted); font-size:13px; text-align:center; max-width:900px; }
-  h1 { user-select:none; }
-  .toasts { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; z-index:10; }
-  .toast { background:rgba(17,26,46,.96); border:1px solid #334155; border-radius:12px; padding:10px 16px; font-size:14px; animation:toastIn .25s ease-out; }
-  .toast.big { font-size:22px; font-weight:800; border-color:#fbbf24; color:#fbbf24; }
-  @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-  canvas.party { animation:hue 6s linear infinite; }
-  @keyframes hue { to { filter:hue-rotate(360deg); } }
+  .toasts { position:fixed; left:50%; bottom:22px; z-index:10; display:flex; flex-direction:column; align-items:center; gap:8px; width:min(92vw,520px); transform:translateX(-50%); pointer-events:none; }
+  .toast { padding:11px 16px; border:1px solid var(--ink); border-radius:12px; color:var(--paper); background:var(--ink); box-shadow:0 12px 30px rgba(21,40,33,.2); font-size:13px; font-weight:800; text-align:center; animation:toastIn .32s cubic-bezier(.16,1,.3,1); }
+  .toast.big { border-color:var(--coral); color:var(--ink); background:var(--butter); font-size:17px; }
+  @keyframes toastIn { from { opacity:0; transform:translateY(8px) scale(.98); filter:blur(3px); } to { opacity:1; transform:translateY(0) scale(1); filter:blur(0); } }
+  @media (max-width:1100px) { .topbar { grid-template-columns:1fr auto; } .game-switch { grid-column:1 / -1; grid-row:2; justify-self:center; } .header-tools { grid-column:2; grid-row:1; } .play-layout { grid-template-columns:minmax(0,1fr) 280px; } }
+  @media (max-width:760px) { .site-shell { width:min(100% - 28px,620px); } .topbar { grid-template-columns:1fr auto; gap:14px; padding:15px 0; } .brand-mark { width:36px; height:36px; font-size:21px; } .brand-word { font-size:25px; } .brand-note { font-size:8px; } .header-tools { gap:7px; } #pillPlayers, #pillRoom { display:none; } .action-button { min-height:40px; padding:0 12px; } .game-switch { width:100%; grid-row:2; } .game-tab { justify-content:center; flex:1; min-height:43px; padding:0 7px; font-size:11px; } main { padding:22px 0 32px; } .intro-row { align-items:flex-start; flex-direction:column; gap:7px; margin-bottom:14px; } .intro-row h1 { font-size:32px; } .intro-row p { font-size:12px; } .play-layout { grid-template-columns:1fr; gap:13px; } .stage-shell { border-radius:14px; } .stage-bar { min-height:40px; padding:0 11px; } .stage-label { font-size:10px; } .stage-hint { font-size:10px; } .help { align-items:flex-start; flex-direction:column; gap:4px; padding-top:9px; font-size:11px; } .pairing-panel { display:grid; grid-template-columns:minmax(0,1fr) 110px; column-gap:14px; padding:16px; border-radius:14px; } .pairing-top { grid-column:1; align-self:end; } .pairing-top h2 { font-size:21px; } .pairing-state { font-size:9px; } .pairing-copy { grid-column:1; grid-row:2; min-height:0; margin:6px 0 10px; font-size:11px; } .qr-frame { grid-column:2; grid-row:1 / span 3; align-self:center; min-height:0; padding:8px; } .qr-frame img { width:100%; } .qr-placeholder { width:82px; } .room-label { grid-column:1; margin:0 0 3px; } .room-code { grid-column:1; min-height:39px; font-size:29px; } .pairing-actions { grid-column:1 / -1; margin-top:12px; } .pairing-foot { grid-column:1 / -1; padding-top:12px; } }
+  @media (max-width:480px) { .site-shell { width:calc(100% - 20px); } .brand { gap:7px; } .brand-mark { width:32px; height:32px; font-size:19px; } .brand-word { font-size:21px; } .brand-note { font-size:7px; letter-spacing:.08em; } .header-tools { gap:5px; } .theme-toggle { width:36px; height:36px; border-radius:11px; } .header-tools .pill { min-height:34px; padding:0 8px; font-size:9px; } .header-tools .action-button { width:36px; min-height:36px; overflow:hidden; padding:0; font-size:0; } .header-tools .action-button::before { content:"+"; font-size:21px; line-height:1; } .game-tab { gap:6px; } .tab-icon { width:21px; height:21px; } .pairing-panel { grid-template-columns:minmax(0,1fr) 90px; gap:9px; padding:13px; } .qr-frame { padding:6px; } .qr-placeholder { width:68px; font-size:9px; } .pairing-top { align-items:flex-start; flex-direction:column; gap:5px; } .pairing-top h2 { font-size:19px; } .pairing-copy { margin-top:2px; } }
+  @media (max-width:480px) { .header-tools .pill:first-of-type { width:32px; justify-content:center; padding:0; } #txtServer { display:none; } }
+  @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
 </style>
 </head>
 <body>
-  <!-- Psst. You read page source for fun? Good. Open the browser console. -->
-  <header>
-    <h1 id="title">WOBBLE</h1>
-    <nav class="game-switch" aria-label="Choose a game">
-      <button class="game-tab" id="wobbleTab" aria-pressed="true">WOBBLE</button>
-      <button class="game-tab" id="pongTab" aria-pressed="false">PING PONG</button>
-    </nav>
-    <div class="pills">
-      <div class="pill"><span class="dot" id="dotServer"></span><span id="txtServer">Server: connecting</span></div>
-      <div class="pill" id="pillPlayers">Players: 0/4</div>
-      <div class="pill" id="pillRoom">Room: -</div>
-      <button class="small" id="joinBtn">+ Add player (QR)</button>
-    </div>
-  </header>
+  <div class="site-shell">
+    <header class="topbar">
+      <button class="brand" id="title" type="button" aria-label="WOBBLE Arcade">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <span><span class="brand-word">WOBBLE</span><span class="brand-note">Arcade for everyone</span></span>
+      </button>
+      <nav class="game-switch" aria-label="Choose a game">
+        <button class="game-tab" id="wobbleTab" type="button" aria-pressed="true"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="6.5"/><path d="M7 9.3 4 7m10.5 0L17 4m1 9h2"/></svg></span>WOBBLE</button>
+        <button class="game-tab" id="pongTab" type="button" aria-pressed="false"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 6v12m14-12v12M5 12h14"/><circle cx="12" cy="8" r="2.2"/></svg></span>PING PONG</button>
+      </nav>
+      <div class="header-tools">
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to dark mode" title="Switch to dark mode" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="themeIcon" d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.7 8.7 0 1 0 20.5 15.2Z"/></svg></button>
+        <div class="pill" aria-live="polite"><span class="dot warn" id="dotServer"></span><span id="txtServer">Connecting…</span></div>
+        <div class="pill" id="pillPlayers">Players: 0/4</div>
+        <div class="pill" id="pillRoom">Room: —</div>
+        <button class="action-button" id="joinBtn" type="button">Invite players</button>
+      </div>
+    </header>
 
-  <div class="scoreboard" id="scoreboard"></div>
+    <main>
+      <div class="intro-row">
+        <h1 id="gameTitle">Make a little arcade.</h1>
+        <p id="gameSubtitle">Pick up a phone, find your balance, and bring the whole room into the game.</p>
+      </div>
+      <div class="scoreboard" id="scoreboard" aria-label="Players and scores" aria-live="polite"></div>
+      <div class="play-layout">
+        <section class="play-column" aria-label="Game">
+          <div class="stage-shell">
+            <div class="stage-bar">
+              <span class="stage-label"><span class="dot"></span><span id="stageMode">The arcade is ready</span></span>
+              <span class="stage-hint" id="stageHint">ROOM —</span>
+            </div>
+            <div class="stage">
+              <canvas id="game" width="900" height="560" role="img" aria-label="WOBBLE game playfield"></canvas>
+            </div>
+          </div>
+          <div class="help" id="help"><span><b>Phone:</b> <span id="helpPhone">tilt to roll · jump over holes · dash for a speed burst</span></span><span><b>Keyboard:</b> <span id="helpKeys">arrows or WASD · Space to jump · Shift to dash</span></span></div>
+        </section>
 
-  <div class="stage">
-    <canvas id="game" width="900" height="560"></canvas>
-    <div class="overlay" id="overlay">
-      <div class="title" id="ovTitle">Connecting to server…</div>
-      <img id="qr" class="hidden" alt="Pairing QR code">
-      <div class="code" id="roomCode"></div>
-      <div class="muted" id="ovMsg"></div>
-      <button id="resumeBtn" class="hidden">Back to game</button>
-      <button class="ghost" id="kbBtn">Play with keyboard instead (testing)</button>
-    </div>
+        <aside class="pairing-panel" id="pairingPanel" aria-labelledby="ovTitle">
+          <div class="pairing-top"><h2 id="ovTitle">Pair your phone</h2><span class="pairing-state"><span class="dot warn" id="pairingDot"></span><span id="pairingLabel">Connecting</span></span></div>
+          <p class="pairing-copy" id="ovMsg">Open the controller app and scan this code to join the game.</p>
+          <div class="qr-frame" id="qrFrame"><div class="qr-placeholder" id="qrPlaceholder">QR code appears<br>when the room is ready</div><img id="qr" class="hidden" alt="QR code for joining this game room"></div>
+          <p class="room-label">Room code</p>
+          <div class="room-code" id="roomCode" aria-live="polite">·····</div>
+          <div class="pairing-actions">
+            <button class="action-button hidden" id="resumeBtn" type="button">Return to game</button>
+            <button class="action-button secondary" id="kbBtn" type="button">Play with keyboard</button>
+          </div>
+          <div class="pairing-foot"><span class="phone-mark" aria-hidden="true">W</span><span>One shared screen. A phone for every player. Your browser keeps the score.</span></div>
+        </aside>
+      </div>
+    </main>
   </div>
-
-  <div class="help" id="help">Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash</div>
-
-<div class="toasts" id="toasts"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 (() => {
   const W = 900, H = 560;
+  // Keep website player colors identical to the server-assigned controller colors.
+  const PLAYER_PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b'];
   const canvas = document.getElementById('game');
   const g = canvas.getContext('2d');
   const el = (id) => document.getElementById(id);
+  let canvasPaper = '#f4ead7';
+  const themeIcon = el('themeIcon');
+  function setTheme(theme, save = true) {
+    const dark = theme === 'dark';
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    canvasPaper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+    const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    el('themeToggle').setAttribute('aria-label', label);
+    el('themeToggle').setAttribute('title', label);
+    el('themeToggle').setAttribute('aria-pressed', String(dark));
+    themeIcon.setAttribute('d', dark
+      ? 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42'
+      : 'M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.7 8.7 0 1 0 20.5 15.2Z');
+    if (save) { try { localStorage.setItem('wobble.theme', dark ? 'dark' : 'light'); } catch (e) {} }
+  }
+  let savedTheme = 'light';
+  try { savedTheme = localStorage.getItem('wobble.theme') || 'light'; } catch (e) {}
+  setTheme(savedTheme, false);
 
   // ---------- state ----------
   const MAX_PLAYERS = 4;
@@ -276,7 +368,10 @@
       const offset = Math.max(-1, Math.min(1, (ball.y - pong.paddles[side]) / (PADDLE_H / 2)));
       const direction = side === 0 ? 1 : -1;
       // Each paddle return speeds up the rally; charged returns add a bigger boost.
-      const currentSpeed = Math.min(900, Math.hypot(ball.vx, ball.vy) * (pong.charged[side] ? 1.24 : 1.08));
+      const powerShot = pong.charged[side];
+      const currentSpeed = powerShot
+        ? Math.min(1100, Math.hypot(ball.vx, ball.vy) * 1.55)
+        : Math.min(900, Math.hypot(ball.vx, ball.vy) * 1.08);
       const angle = offset * 0.9;
       ball.x = side === 0 ? paddleX + PADDLE_W / 2 + PONG_BALL_R : paddleX - PADDLE_W / 2 - PONG_BALL_R;
       ball.vx = Math.cos(angle) * currentSpeed * direction;
@@ -287,7 +382,7 @@
         pong.powerCooldowns[side] = PONG_POWER_COOLDOWN;
         pong.powerTrail.length = 0;
         pong.powerTrailTime = PONG_POWER_TRAIL_TIME;
-        pong.powerTrailColor = side === 0 ? '#60a5fa' : '#fb7185';
+        pong.powerTrailColor = PLAYER_PALETTE[side];
         haptic(players.get(side), 'level');
       }
     }
@@ -395,6 +490,7 @@
     }
     g.closePath();
     g.fill();
+    g.stroke();
   }
 
   function drawBall(p) {
@@ -416,11 +512,12 @@
     g.fill();
     const r = BALL_R * (1 + lift * 0.5);
     const by = b.y - lift * 26;
-    g.fillStyle = p.color;
+    const ballColor = p.key === 'kb' ? PLAYER_PALETTE[0] : (PLAYER_PALETTE[Number(p.key)] || p.color);
+    g.fillStyle = ballColor;
     g.beginPath(); g.arc(b.x, by, r, 0, Math.PI * 2); g.fill();
-    g.fillStyle = 'rgba(255,255,255,.35)';
+    g.fillStyle = 'rgba(255,250,240,.72)';
     g.beginPath(); g.arc(b.x - r / 3, by - r / 3, r / 3, 0, Math.PI * 2); g.fill();
-    if (p.boost > 0) { g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 2; g.beginPath(); g.arc(b.x, by, r + 5, 0, Math.PI * 2); g.stroke(); }
+    if (p.boost > 0) { g.strokeStyle = '#f4cc59'; g.lineWidth = 4; g.beginPath(); g.arc(b.x, by, r + 6, 0, Math.PI * 2); g.stroke(); }
     if (p.flash > 0) { g.strokeStyle = `rgba(239,68,68,${p.flash * 2})`; g.lineWidth = 4; g.beginPath(); g.arc(b.x, by, 30, 0, Math.PI * 2); g.stroke(); }
     if (p.dizzy > 0) {
       for (let i = 0; i < 3; i++) {
@@ -436,17 +533,21 @@
 
   function drawPong() {
     g.clearRect(0, 0, W, H);
-    g.fillStyle = '#0b1220';
+    g.fillStyle = canvasPaper;
     g.fillRect(0, 0, W, H);
-    g.fillStyle = '#10283a';
-    g.fillRect(18, 18, W - 36, H - 36);
-    g.strokeStyle = '#31506a';
-    g.lineWidth = 2;
-    g.strokeRect(18, 18, W - 36, H - 36);
+    g.fillStyle = '#ef5a3a';
+    g.beginPath(); g.roundRect(16, 16, W - 32, H - 32, 24); g.fill();
+    g.fillStyle = '#176b4b';
+    g.beginPath(); g.roundRect(26, 26, W - 52, H - 52, 17); g.fill();
+    g.save();
+    g.beginPath(); g.roundRect(26, 26, W - 52, H - 52, 17); g.clip();
+    g.fillStyle = 'rgba(244,234,215,.07)';
+    for (let x = 40; x < W; x += 72) for (let y = 30; y < H; y += 72) if (((x + y) / 72) % 2 < 1) g.fillRect(x, y, 72, 72);
+    g.restore();
 
     g.setLineDash([10, 12]);
-    g.strokeStyle = '#38536a';
-    g.lineWidth = 2;
+    g.strokeStyle = '#dce8c4';
+    g.lineWidth = 3;
     g.beginPath(); g.moveTo(W / 2, 26); g.lineTo(W / 2, H - 26); g.stroke();
     g.setLineDash([]);
 
@@ -455,31 +556,35 @@
     const keyboard = players.get('kb');
     const labels = [left?.connected ? 'PLAYER 1 · PHONE' : keyboard?.connected ? 'PLAYER 1 · KEYBOARD' : 'PLAYER 1 · CPU', right?.connected ? 'PLAYER 2 · PHONE' : 'PLAYER 2 · CPU'];
     g.textAlign = 'center';
-    g.fillStyle = '#a8bbce';
+    g.fillStyle = '#e4eed8';
     g.font = '700 13px system-ui, sans-serif';
     g.fillText(labels[0], W * 0.25, 72);
     g.fillText(labels[1], W * 0.75, 72);
-    g.fillStyle = '#f8fafc';
-    g.font = '700 48px system-ui, sans-serif';
-    g.fillText(String(pong.scores[0]), W * 0.25, 128);
-    g.fillText(String(pong.scores[1]), W * 0.75, 128);
-    g.fillStyle = '#8298ad';
+    for (let side = 0; side < 2; side++) {
+      const center = W * (side === 0 ? 0.25 : 0.75);
+      g.fillStyle = PLAYER_PALETTE[side];
+      g.beginPath(); g.roundRect(center - 43, 73, 86, 74, 17); g.fill();
+      g.fillStyle = '#fffaf0';
+      g.font = '900 66px system-ui, sans-serif';
+      g.fillText(String(pong.scores[side]), center, 133);
+    }
+    g.fillStyle = '#f4cc59';
     g.font = '600 13px system-ui, sans-serif';
     g.fillText('FIRST TO 5', W / 2, 52);
 
     for (let side = 0; side < 2; side++) {
       const x = side === 0 ? PADDLE_INSET : W - PADDLE_INSET;
       const y = pong.paddles[side] - PADDLE_H / 2;
-      g.fillStyle = side === 0 ? '#60a5fa' : '#fb7185';
+      g.fillStyle = PLAYER_PALETTE[side];
       g.beginPath();
       g.roundRect(x - PADDLE_W / 2, y, PADDLE_W, PADDLE_H, 7);
       g.fill();
       if (pong.charged[side]) {
-        g.fillStyle = side === 0 ? '#93c5fd' : '#fda4af';
+        g.fillStyle = '#f4cc59';
         g.font = '700 11px system-ui, sans-serif';
         g.fillText('POWER READY', x, y - 12);
       } else if (pong.powerCooldowns[side] > 0) {
-        g.fillStyle = '#8298ad';
+        g.fillStyle = '#e4eed8';
         g.font = '700 10px system-ui, sans-serif';
         g.fillText(`POWER ${pong.powerCooldowns[side].toFixed(1)}s`, x, y - 12);
       }
@@ -488,7 +593,7 @@
     for (let i = 0; i < pong.trail.length; i++) {
       const point = pong.trail[i];
       g.globalAlpha = (i + 1) / pong.trail.length * 0.28;
-      g.fillStyle = '#e2e8f0';
+      g.fillStyle = '#f4cc59';
       g.beginPath(); g.arc(point.x, point.y, PONG_BALL_R * (0.35 + i / pong.trail.length * 0.55), 0, Math.PI * 2); g.fill();
     }
     g.globalAlpha = 1;
@@ -505,26 +610,29 @@
     }
     g.globalAlpha = 1;
     g.shadowBlur = 0;
-    g.shadowColor = '#e2e8f0';
-    g.shadowBlur = 16;
-    g.fillStyle = '#f8fafc';
+    g.shadowColor = 'transparent';
+    g.shadowBlur = 0;
+    g.fillStyle = '#f4cc59';
+    g.strokeStyle = '#152821';
+    g.lineWidth = 3;
     g.beginPath(); g.arc(pong.ball.x, pong.ball.y, PONG_BALL_R, 0, Math.PI * 2); g.fill();
+    g.stroke();
     g.shadowBlur = 0;
 
     g.textAlign = 'center';
     if (pong.winner != null) {
-      g.fillStyle = '#f8fafc';
+      g.fillStyle = '#fffaf0';
       g.font = '700 22px system-ui, sans-serif';
       g.fillText(`PLAYER ${pong.winner + 1} WINS`, W / 2, H - 58);
-      g.fillStyle = '#a8bbce';
+      g.fillStyle = '#e4eed8';
       g.font = '500 14px system-ui, sans-serif';
       g.fillText('Choose Ping Pong again to start a rematch', W / 2, H - 34);
     } else if (pong.waitingForServe) {
-      g.fillStyle = '#dbeafe';
+      g.fillStyle = '#f4cc59';
       g.font = '700 16px system-ui, sans-serif';
       g.fillText(`PLAYER ${pong.servingSide + 1} · PRESS SERVE TO START`, W / 2, H - 48);
     } else {
-      g.fillStyle = '#7890a6';
+      g.fillStyle = '#e4eed8';
       g.font = '500 13px system-ui, sans-serif';
       g.fillText('Tilt to move · SERVE starts play · POWER charges your next hit', W / 2, H - 28);
     }
@@ -534,21 +642,29 @@
   function draw() {
     if (gameMode === 'pong') { drawPong(); return; }
     g.clearRect(0, 0, W, H);
-    g.strokeStyle = '#16213a'; g.lineWidth = 1;
-    for (let x = 0; x <= W; x += 50) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
-    for (let y = 0; y <= H; y += 50) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    g.fillStyle = canvasPaper; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#ef5a3a'; g.beginPath(); g.roundRect(13, 13, W - 26, H - 26, 22); g.fill();
+    g.fillStyle = '#55a875'; g.beginPath(); g.roundRect(23, 23, W - 46, H - 46, 16); g.fill();
+    g.save();
+    g.beginPath(); g.roundRect(23, 23, W - 46, H - 46, 16); g.clip();
+    g.fillStyle = 'rgba(244,234,215,.12)';
+    for (let y = 25; y < H; y += 56) for (let x = 25; x < W; x += 56) if (((x + y) / 56) % 2 < 1) g.fillRect(x, y, 56, 56);
+    g.restore();
+    g.strokeStyle = 'rgba(255,250,240,.7)'; g.lineWidth = 2;
+    g.beginPath(); g.roundRect(36, 36, W - 72, H - 72, 11); g.stroke();
 
     for (const h of holes) {
-      const grad = g.createRadialGradient(h.x, h.y, 2, h.x, h.y, h.r);
-      grad.addColorStop(0, '#000'); grad.addColorStop(0.8, '#05080f'); grad.addColorStop(1, '#1e293b');
-      g.fillStyle = grad; g.beginPath(); g.arc(h.x, h.y, h.r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(21,40,33,.22)'; g.beginPath(); g.ellipse(h.x + 2, h.y + 5, h.r + 5, h.r * .72 + 4, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#ef5a3a'; g.beginPath(); g.ellipse(h.x, h.y, h.r + 3, h.r * .72 + 3, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#152821'; g.beginPath(); g.ellipse(h.x, h.y - 1, h.r - 1, h.r * .68 - 1, 0, 0, Math.PI * 2); g.fill();
     }
-    g.fillStyle = '#fbbf24';
+    g.fillStyle = '#f4cc59'; g.strokeStyle = '#152821'; g.lineWidth = 1.5;
     for (const s of stars) if (!s.got) drawStar(s.x, s.y, STAR_R + 3);
     for (const p of players.values()) drawBall(p);
 
-    g.fillStyle = '#e2e8f0'; g.font = '600 18px system-ui, sans-serif';
-    g.fillText(`Level ${level}   Stars left ${stars.filter((s) => !s.got).length}`, 16, 28);
+    g.fillStyle = '#152821'; g.beginPath(); g.roundRect(38, 36, 206, 39, 10); g.fill();
+    g.fillStyle = '#fffaf0'; g.font = '900 16px "Trebuchet MS", sans-serif';
+    g.fillText(`LEVEL ${level}   ·   ${stars.filter((s) => !s.got).length} STARS LEFT`, 50, 61);
     drawConfetti();
   }
 
@@ -557,49 +673,40 @@
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
     stepConfetti(dt);
-    if (!overlayVisible()) update(dt);
+    if (!gamePaused()) update(dt);
     draw();
     requestAnimationFrame(frame);
   }
 
   // ---------- UI ----------
-  const overlay = el('overlay');
+  const pairingPanel = el('pairingPanel');
   let roomInfo = null;
 
   const canPlay = () => net.kbMode || (net.ws && phonePlayers().length > 0);
-  function overlayVisible() { return net.showJoin || !canPlay(); }
+  function gamePaused() { return net.showJoin || !canPlay(); }
 
   function renderScoreboard() {
     const box = el('scoreboard');
+    const isPong = gameMode === 'pong';
+    box.classList.toggle('hidden', isPong);
     box.textContent = '';
-    if (gameMode === 'pong') {
-      for (let side = 0; side < 2; side++) {
-        const phone = players.get(side);
-        const keyboard = players.get('kb');
-        const chip = document.createElement('div');
-        chip.className = 'chip' + (phone?.connected || keyboard?.connected ? '' : ' off');
-        const dot = document.createElement('span');
-        dot.className = 'dot'; dot.style.background = side === 0 ? '#60a5fa' : '#fb7185';
-        const name = document.createElement('b'); name.textContent = `Player ${side + 1}`;
-        const stat = document.createElement('span'); stat.className = 'stat';
-        stat.textContent = `${phone?.connected ? 'phone' : side === 0 && keyboard?.connected ? 'keyboard' : 'CPU'} · ${pong.scores[side]} points`;
-        chip.append(dot, name, stat);
-        box.append(chip);
-      }
-      return;
-    }
+    if (isPong) return;
     const list = [...players.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)));
     for (const p of list) {
       const chip = document.createElement('div');
-      chip.className = 'chip' + (p.connected ? '' : ' off');
+      chip.className = 'chip score-chip' + (p.connected ? '' : ' off');
+      chip.style.setProperty('--player-color', p.key === 'kb' ? PLAYER_PALETTE[0] : (PLAYER_PALETTE[Number(p.key)] || p.color));
       const dot = document.createElement('span');
-      dot.className = 'dot'; dot.style.background = p.color;
-      const name = document.createElement('b'); name.textContent = p.name;
-      const stat = document.createElement('span'); stat.className = 'stat';
-      let text = `★ ${p.stars}   ✖ ${p.falls}`;
-      if (p.key !== 'kb') text += p.connected ? `   ping ${p.rtt != null ? p.rtt + ' ms' : '–'} · ${p.rate} Hz` : '   offline';
+      dot.className = 'dot'; dot.style.background = p.key === 'kb' ? PLAYER_PALETTE[0] : (PLAYER_PALETTE[Number(p.key)] || p.color);
+      const name = document.createElement('b'); name.className = 'player-name'; name.textContent = p.name;
+      const score = document.createElement('strong'); score.className = 'score-value'; score.textContent = String(p.stars);
+      score.setAttribute('aria-label', `${p.stars} stars collected`);
+      const scoreLabel = document.createElement('span'); scoreLabel.className = 'score-label'; scoreLabel.textContent = 'Stars';
+      const stat = document.createElement('span'); stat.className = 'stat score-detail';
+      let text = `Falls ${p.falls}`;
+      if (p.key !== 'kb') text += p.connected ? ` · ${p.rtt != null ? p.rtt + ' ms' : 'connecting'}` : ' · Offline';
       stat.textContent = text;
-      chip.append(dot, name, stat);
+      chip.append(dot, name, score, scoreLabel, stat);
       box.append(chip);
     }
   }
@@ -607,37 +714,63 @@
   function updateUI() {
     el('wobbleTab').setAttribute('aria-pressed', String(gameMode === 'wobble'));
     el('pongTab').setAttribute('aria-pressed', String(gameMode === 'pong'));
-    el('help').textContent = gameMode === 'pong'
-      ? 'Two phones play head to head; one phone or W/S plays against the computer. Tilt to move · press SERVE to serve · press POWER to charge your next hit (4s cooldown).'
-      : 'Tilt the phone to roll · shake or tap JUMP to hop over holes · DASH for a speed burst · collect the stars before your friends do · keyboard: arrows/WASD, space = jump, shift = dash';
+    const isPong = gameMode === 'pong';
+    const connected = phonePlayers().length;
+    el('gameTitle').textContent = isPong ? 'Rally together.' : 'Roll together.';
+    el('gameSubtitle').textContent = isPong
+      ? 'Tilt to chase the ball, charge a power shot, and race to five points.'
+      : 'Tilt to chase the stars, hop the holes, and bring the whole room into play.';
+    const playerSummary = connected ? `${connected} phone${connected === 1 ? '' : 's'}` : 'Keyboard';
+    el('stageMode').textContent = canPlay() ? `${playerSummary} ready to play` : 'Waiting for the first player';
+    el('stageHint').textContent = roomInfo ? `ROOM ${roomInfo.room}` : 'ROOM LOADING';
+    canvas.setAttribute('aria-label', isPong ? 'Ping Pong court. Tilt your phone to move the paddle.' : 'WOBBLE playfield. Tilt your phone to roll and collect stars.');
+    el('helpPhone').textContent = isPong
+      ? 'tilt to move · SERVE starts play · POWER charges the next hit'
+      : 'tilt to roll · jump over holes · dash for a speed burst';
+    el('helpKeys').textContent = isPong
+      ? 'W/S to move · Space to serve · Shift or X for POWER'
+      : 'arrows or WASD · Space to jump · Shift to dash';
     el('dotServer').className = 'dot' + (net.ws ? ' ok' : ' warn');
-    el('txtServer').textContent = 'Server: ' + (net.ws ? 'connected' + (net.rtt != null ? ` (${net.rtt} ms)` : '') : 'reconnecting…');
+    el('txtServer').textContent = net.ws ? `Server connected${net.rtt != null ? ` · ${net.rtt} ms` : ''}` : 'Reconnecting…';
     el('pillPlayers').textContent = `Players: ${phonePlayers().length}/${gameMode === 'pong' ? 2 : MAX_PLAYERS}`;
-    el('pillRoom').textContent = 'Room: ' + (roomInfo ? roomInfo.room : '-');
-    el('joinBtn').textContent = gameMode === 'pong' ? '+ Add opponent (QR)' : '+ Add player (QR)';
-    el('joinBtn').classList.toggle('hidden', !net.ws);
+    el('pillRoom').textContent = 'Room: ' + (roomInfo ? roomInfo.room : '—');
+    el('joinBtn').textContent = gameMode === 'pong' ? 'Invite an opponent' : 'Invite players';
 
-    overlay.classList.toggle('hidden', !overlayVisible());
+    pairingPanel.classList.toggle('is-spotlit', gamePaused());
+    el('pairingDot').className = 'dot' + (net.ws ? (connected || net.kbMode ? ' ok' : ' warn') : ' warn');
+    el('pairingLabel').textContent = !net.ws ? 'Connecting' : connected ? `${connected} connected` : net.kbMode ? 'Keyboard ready' : 'Waiting for players';
     if (roomInfo) {
       el('qr').src = roomInfo.qr; el('qr').classList.remove('hidden');
+      el('qrPlaceholder').classList.add('hidden');
       el('roomCode').textContent = roomInfo.room;
+    } else {
+      el('qr').classList.add('hidden');
+      el('qrPlaceholder').classList.remove('hidden');
+      el('roomCode').textContent = '·····';
     }
     el('resumeBtn').classList.toggle('hidden', !(net.showJoin && canPlay()));
     el('kbBtn').classList.toggle('hidden', canPlay());
 
     if (!net.ws) {
-      el('ovTitle').textContent = 'Connecting to server…';
-      el('ovMsg').textContent = 'Make sure the server is running (npm start). Retrying automatically.';
+      el('ovTitle').textContent = roomInfo ? 'Reconnecting to the game' : 'Waiting on the server';
+      el('ovMsg').textContent = 'The game server is not responding yet. Check that it is running locally; this page will retry automatically.';
     } else if (net.showJoin) {
-      el('ovTitle').textContent = gameMode === 'pong' ? 'Add an opponent' : 'Add a player';
-      el('ovMsg').textContent = `Scan with the app on another phone (up to ${MAX_PLAYERS}), or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
+      el('ovTitle').textContent = gameMode === 'pong' ? 'Bring in an opponent' : 'Bring in a friend';
+      el('ovMsg').textContent = `Open the controller app and scan this code, or enter the room code. ${gameMode === 'pong' ? 'Play head to head, or keep the computer on the other side.' : `Up to ${MAX_PLAYERS} phones can join this game.`}`;
+    } else if (connected) {
+      el('ovTitle').textContent = 'Room is ready';
+      el('ovMsg').textContent = `${connected} ${connected === 1 ? 'phone is' : 'phones are'} connected. Tilt to play; keep this code handy if someone else wants to join.`;
+    } else if (net.kbMode) {
+      el('ovTitle').textContent = 'Keyboard play is ready';
+      el('ovMsg').textContent = gameMode === 'pong' ? 'Move with W/S, press Space to serve, and Shift or X to charge POWER.' : 'Move with the arrow keys or WASD. Space jumps and Shift dashes.';
     } else {
-      el('ovTitle').textContent = net.everPaired ? 'All phones disconnected' : gameMode === 'pong' ? 'Pair a phone to play' : 'Pair your phone';
-      el('ovMsg').textContent = net.everPaired
-        ? 'Game paused. The apps reconnect automatically, or scan the QR code again.'
-        : `Open the app and scan this QR code, or enter the room code. Server: ${roomInfo ? roomInfo.server : ''}`;
+      el('ovTitle').textContent = 'Scan to join';
+      el('ovMsg').textContent = gameMode === 'pong'
+        ? 'Scan with the controller app to move your paddle. A second phone can join for head-to-head play.'
+        : 'Open the controller app and scan this code, or enter the room code. Your phone becomes your controller.';
     }
-    el('kbBtn').textContent = gameMode === 'pong' ? 'Play solo vs computer' : 'Play with keyboard instead (testing)';
+    el('kbBtn').textContent = gameMode === 'pong' ? 'Play solo vs computer' : 'Play with keyboard';
+    el('resumeBtn').textContent = 'Return to game';
     renderScoreboard();
   }
 
@@ -755,7 +888,9 @@
     const kb = players.get('kb');
     eggKey(k);
     if (k === ' ') { gameMode === 'pong' ? servePong(0) : jump(kb); e.preventDefault(); return; }
-    if (k === 'shift') { gameMode === 'pong' ? chargePong(0) : dash(kb); return; }
+    const powerKey = e.code === 'ShiftLeft' || e.code === 'ShiftRight' || k === 'x';
+    if (powerKey && gameMode === 'pong') { if (!e.repeat) chargePong(0); e.preventDefault(); return; }
+    if (k === 'shift') { dash(kb); e.preventDefault(); return; }
     if (k.startsWith('arrow')) e.preventDefault();
     keys.add(k);
   });
@@ -765,6 +900,7 @@
     if (!players.has('kb')) players.set('kb', makePlayer('kb', '#e2e8f0'));
     updateUI();
   });
+  el('themeToggle').addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
   el('joinBtn').addEventListener('click', () => { net.showJoin = true; updateUI(); });
   el('resumeBtn').addEventListener('click', () => { net.showJoin = false; updateUI(); });
   el('wobbleTab').addEventListener('click', () => setGameMode('wobble'));
